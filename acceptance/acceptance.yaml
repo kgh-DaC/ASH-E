@@ -1,0 +1,12 @@
+# Acceptance thresholds (spec 9.4, confirmed by user 2026-10-27; values = v1 proposal as-is).
+# LOCKED: SHA-256 is recorded in acceptance/holdout_manifest.sha256 by training/lock_acceptance.py.
+# Scripts must never modify this file. Changing it needs user approval + a spec change-log entry.
+# Distance bins are PROXY distance in stage A (box-size based, approximate).
+binary_precision_max4m: 0.90        # state, persons within 4 m
+binary_recall_max3m: 0.80           # state, persons within 3 m
+binary_recall_3to5m: 0.60           # state, persons 3-5 m
+smoking_holding_accuracy: 0.75      # among true positives
+lookalike_false_confirm_per_10min: 1   # at most 1 per 10 min on similar-object/gesture clips
+confirm_time_median_s: 2.0
+rpi5_rate_hz_min: 5.0               # 3 persons, ONNX Runtime or NCNN
+priority_flicker_s5: 0              # out of this scope (priority logic not in scope of this run)
