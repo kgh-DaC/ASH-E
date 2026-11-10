@@ -101,3 +101,22 @@ def refuse_holdout(path: Path) -> None:
 def coco_split(image_id: int) -> str:
     """Deterministic train/val assignment for public COCO images (never holdout): 1 in 10 -> val."""
     return "val" if int(image_id) % 10 == 0 else "train"
+
+
+EDGE_FRAC = 0.02  # bbox within 2% of the left/right border counts as "cut off at the edge"
+EDGE_VISIBLE_KPTS = 8  # edge person with >= this many joints (conf >= 0.5) makes the frame ambiguous
+
+
+def own_subject(persons, width: int):
+    """Own captures only (protocol: ONE consenting subject per capture.py session). Returns [subject] when exactly one
+    person is fully inside the frame (people cut off at the left/right border are ignored), else [] = drop the frame.
+    Capture QC 2026-11-10: an unconsented third party (black padded jacket) sits at the right border in 43-100% of
+    frames and sometimes stands fully inside next to P01. We cannot tell people apart reliably, so frames with two or
+    more fully-visible people are dropped instead of guessing. Inference and evaluation keep everyone; this is only for
+    training data and draft labels. Raw frames are not modified."""
+    m = EDGE_FRAC * width
+    inner = [p for p in persons if p.bbox_xyxy[0] > m and p.bbox_xyxy[2] < width - m]
+    # An edge-cut person with many visible joints is a real candidate (e.g. P01 half out of frame at the left edge while
+    # the third party stands inside): ambiguous -> drop. Seated third party at the border: median 3 visible joints.
+    big_edge = [p for p in persons if all(p is not q for q in inner) and int((p.keypoints[:, 2] >= 0.5).sum()) >= EDGE_VISIBLE_KPTS]
+    return inner if len(inner) == 1 and not big_edge else []

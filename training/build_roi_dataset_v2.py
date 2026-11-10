@@ -172,7 +172,8 @@ def main():
                     continue
                 H, W = img.shape[:2]
                 boxes = [b for c, b in read_yolo(p.with_suffix(".txt"), W, H) if c == 0]
-                for suf, crop, kb, st in process_image(img, boxes, pose, cfg, rng, a.jitter, True, split == "train"):
+                for suf, crop, kb, st in process_image(img, boxes, pose, cfg, rng, a.jitter, True, split == "train",
+                                                       primary_only=True):
                     save_sample(out, split, "own_%s_%s" % (p.stem, suf), crop, kb)
                     stats[split]["own_" + st] += 1
 

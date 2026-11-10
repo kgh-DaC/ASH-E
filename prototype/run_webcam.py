@@ -32,7 +32,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "ash_e_core"))
 from ash_e_core.config import load_perception_config  # noqa: E402
 from ash_e_core.pipeline import PerceptionPipeline  # noqa: E402
-from ash_e_core.viz import draw_detections, NAMES, COLORS  # noqa: E402
+from ash_e_core.viz import draw_detections, draw_priority, EVENT_NAMES, NAMES, COLORS  # noqa: E402
+from ash_e_core.config import load_priority_config  # noqa: E402
+from ash_e_core.priority import PrioritySelector  # noqa: E402
 import clip_io  # noqa: E402  (prototype/clip_io.py: clip recording + replay)
 
 
@@ -73,6 +75,8 @@ def main():
     ap.add_argument("--pose", default=str(ROOT / "models/pose.onnx"))
     ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi.onnx"))
     ap.add_argument("--rate", type=float, default=None, help="processing rate Hz (default process_rate_hz=8, RPi5-like)")
+    ap.add_argument("--priority-config", default=None, help="priority yaml (weights, ranges, hysteresis)")
+    ap.add_argument("--no-priority", action="store_true", help="hide the target selection overlay")
     ap.add_argument("--no-gui", action="store_true")
     ap.add_argument("--max-seconds", type=float, default=0.0, help="stop after N s (0 = until q)")
     ap.add_argument("--save-last", default=None, help="write the last annotated frame here (contains a face; keep local)")
@@ -128,6 +132,10 @@ def main():
     got = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
     print("source opened: %dx%d (requested %dx%d)" % (got[0], got[1], a.width, a.height))
 
+    pcfg = load_priority_config(a.priority_config)
+    new_sel = (lambda: None) if a.no_priority else (lambda: PrioritySelector(pcfg))
+    sel = new_sel()
+    status, last_seq, last_event = None, None, ""
     t_start = time.monotonic()
     last_proc, arr, dbg = -1e9, None, None
     disp_t, proc_t, inf_ms = deque(maxlen=30), deque(maxlen=30), deque(maxlen=30)
@@ -136,7 +144,7 @@ def main():
     recorder, rec_fps, clips_done, auto_started = None, a.record_fps, 0, False
 
     def stop_clip():
-        nonlocal recorder, clips_done, arr, dbg
+        nonlocal recorder, clips_done, arr, dbg, sel, status, last_seq
         footer = recorder.stop()
         if footer:
             clips_done += 1
@@ -145,6 +153,7 @@ def main():
         else:
             print("clip discarded (no frames):", recorder.dir)
         recorder, arr, dbg = None, None, None
+        sel, status, last_seq = new_sel(), None, None  # clip clock -> wall clock: restart the selector
 
     while True:
         ok, frame = cap.read()
@@ -174,9 +183,20 @@ def main():
             proc_t.append(now)
             inf_ms.append(arr.inference_ms)
             n_proc += 1
+        if sel is not None:
+            if arr is not None and (arr.frame_seq, arr.stamp) != last_seq:
+                last_seq = (arr.frame_seq, arr.stamp)
+                status = sel.update(arr, arr.stamp)
+            elif arr is not None:
+                st2 = sel.tick(now - t_start if recorder is None else arr.stamp)
+                status = st2 or status
+            if status is not None and status.last_event:
+                last_event = "%s %.1fs" % (EVENT_NAMES[status.last_event], status.stamp)
         out = frame.copy()
         if arr is not None:
             draw_detections(out, arr, dbg)
+        if sel is not None:
+            draw_priority(out, status, arr, last_event)
         fps_d = (len(disp_t) - 1) / (disp_t[-1] - disp_t[0]) if len(disp_t) > 1 and disp_t[-1] > disp_t[0] else 0.0
         fps_p = (len(proc_t) - 1) / (proc_t[-1] - proc_t[0]) if len(proc_t) > 1 and proc_t[-1] > proc_t[0] else 0.0
         ms = sum(inf_ms) / len(inf_ms) if inf_ms else 0.0
@@ -207,6 +227,7 @@ def main():
                     recorder = clip_io.ClipRecorder(pipe, Path(a.record_out), a.participant, a.session, a.scenario,
                                                     rec_fps, rate)
                     arr = dbg = None
+                    sel, status, last_seq = new_sel(), None, None  # clip clock starts at 0
                 else:
                     stop_clip()
         if a.record_auto and recorder is not None and recorder.elapsed >= a.record_auto:

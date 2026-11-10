@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dataset_utils import ROOT, hamming, list_images, phash, read_yolo, refuse_holdout  # noqa: E402
+from dataset_utils import ROOT, own_subject, hamming, list_images, phash, read_yolo, refuse_holdout  # noqa: E402
 
 from ash_e_core.backends import load_model  # noqa: E402
 from ash_e_core.config import PerceptionConfig  # noqa: E402
@@ -63,13 +63,18 @@ def save_sample(out_dir: Path, split: str, name: str, crop, boxes):
     (out_dir / "labels" / split / (name + ".txt")).write_text("\n".join(lines) + ("\n" if lines else ""))
 
 
-def process_image(img, boxes, pose: PoseModel, cfg, rng, jitter, include_full, train):
-    """Yields (suffix, crop, boxes_in_crop, status)."""
+def process_image(img, boxes, pose: PoseModel, cfg, rng, jitter, include_full, train, primary_only=False):
+    """Yields (suffix, crop, boxes_in_crop, status). primary_only (own captures): ROIs of the single subject only,
+    no whole-frame sample (it would contain the third party), frame dropped when the subject is ambiguous."""
     H, W = img.shape[:2]
     out = []
+    persons = pose.detect(img)
+    if primary_only:
+        persons = own_subject(persons, W)
+        include_full = False
     if include_full:
         out.append(("full", img, [b.copy() for b in boxes], "pos" if boxes else "neg"))
-    for pi, p in enumerate(pose.detect(img)):
+    for pi, p in enumerate(persons):
         for r in compute_rois(p, cfg, W, H):
             variants = [r.xyxy]
             if train:
@@ -155,7 +160,8 @@ def main():
         for p, grp, img in kept_items:
             H, W = img.shape[:2]
             boxes = [b for c, b in read_yolo(p.with_suffix(".txt"), W, H) if c == 0]
-            samples = process_image(img, boxes, pose, cfg, rng, args.jitter, not args.no_full, split == "train")
+            samples = process_image(img, boxes, pose, cfg, rng, args.jitter, not args.no_full, split == "train",
+                                    primary_only=args.source == "own")
             if not samples:
                 st["skipped_imgs_no_sample"] += 1
             for suf, crop, kb, status in samples:

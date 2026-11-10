@@ -24,7 +24,7 @@ import cv2
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "training"))
-from dataset_utils import list_images, write_yolo  # noqa: E402
+from dataset_utils import own_subject, list_images, write_yolo  # noqa: E402
 
 from ash_e_core.backends import load_model  # noqa: E402
 from ash_e_core.config import PerceptionConfig  # noqa: E402
@@ -54,8 +54,8 @@ def main():
         print("WARNING: cigarette model missing (%s). Writing EMPTY drafts; label everything by hand.\n"
               "         Train one first: _workspace/02a_perception_notes.md" % a.model)
 
-    stats = defaultdict(lambda: {"frames": 0, "frames_with_pred": 0, "no_person": 0})
-    queue = []
+    stats = defaultdict(lambda: {"frames": 0, "frames_with_pred": 0, "no_person": 0, "excluded_multi_person": 0})
+    queue, excluded = [], []
     for img_path in list_images(src):
         try:
             rel = img_path.resolve().relative_to(raw_root)  # <PID>/<SESSION>/<scenario>/<file>
@@ -66,7 +66,12 @@ def main():
         dst_dir.mkdir(parents=True, exist_ok=True)
         img = cv2.imread(str(img_path))
         H, W = img.shape[:2]
-        persons = pose.detect(img)
+        detected = pose.detect(img)
+        persons = own_subject(detected, W)  # third party in frame (capture QC 2026-11-10)
+        if detected and not persons:
+            excluded.append(rel.as_posix())  # 2+ fully visible people: subject ambiguous -> not copied, not labelled
+            stats[scenario]["excluded_multi_person"] += 1
+            continue
         boxes = []
         if not cig.is_stub:
             for p in persons:
@@ -93,6 +98,7 @@ def main():
         w = csv.writer(f)
         w.writerow(["priority", "max_conf", "image", "flag"])
         w.writerows(queue)
+    (out / ("excluded_multi_person_%s.txt" % src.name)).write_text("\n".join(excluded) + "\n", encoding="utf-8")
     rep = {k: dict(v) for k, v in stats.items()}
     (out / ("prelabel_report_%s.json" % src.name)).write_text(json.dumps(rep, indent=2))
     print(json.dumps(rep, indent=2))

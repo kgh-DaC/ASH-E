@@ -26,7 +26,9 @@ from typing import Dict, List, Optional
 import cv2
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "ash_e_core"))
-from ash_e_core.config import config_to_dict  # noqa: E402
+from ash_e_core.config import PriorityConfig, config_to_dict  # noqa: E402
+from ash_e_core.priority import PrioritySelector  # noqa: E402
+from ash_e_core.types import TargetEvent  # noqa: E402
 from ash_e_core.serialize import to_dict  # noqa: E402
 from ash_e_core.tracker import Tracker  # noqa: E402
 
@@ -116,7 +118,9 @@ class EventLog:
     frame line  : frame_idx, t, processed (pipeline ran on this frame; else tracks are carried over from the last
                   processed frame), dup, frame_seq, inference_ms, detections (serialize.to_dict of each Detection:
                   track_id, state, state_confidence, raw_state, raw_confidence, cigarette_checked, bbox_*,
-                  distance_m, distance_source (1 = PROXY), ... + "confirmed" = state != none).
+                  distance_m, distance_source (1 = PROXY), ... + "confirmed" = state != none),
+                  target_id (priority selector's target, null if none; carried over on unprocessed frames),
+                  target_event (TargetEvent name on processed frames where one happened, else absent).
     event line  : type "event", event in {track_new, confirm, state_change, release, track_lost}, frame_idx, t,
                   track_id, from_state, to_state, state_confidence, distance_m. Built only from processed frames.
     """
@@ -134,7 +138,7 @@ class EventLog:
     def _w(self, rec: dict) -> None:
         self.f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
 
-    def add_frame(self, idx: int, t: float, arr, processed: bool, dup: bool) -> None:
+    def add_frame(self, idx: int, t: float, arr, processed: bool, dup: bool, target: Optional[dict] = None) -> None:
         self.n_frames += 1
         self.n_dup += int(dup)
         t = round(float(t), 4)
@@ -152,6 +156,8 @@ class EventLog:
             self.last_dets = dets
         else:
             rec.update(frame_seq=None, inference_ms=None, detections=self.last_dets)
+        if target is not None:
+            rec.update(target)
         self._w(rec)
         if self.n_frames % 30 == 0:
             self.f.flush()
@@ -210,10 +216,13 @@ def make_header(*, source: str, pipe, fps: float, width: int, height: int, rate_
 class ClipRunner:
     """Feeds frames of one clip to the pipeline on the clip clock (t = idx / fps) and logs them."""
 
-    def __init__(self, pipe, fps: float, rate_hz: float, throttle: bool, log: EventLog):
+    def __init__(self, pipe, fps: float, rate_hz: float, throttle: bool, log: EventLog,
+                 priority: Optional[PriorityConfig] = None):
         self.pipe, self.fps, self.rate, self.throttle, self.log = pipe, float(fps), float(rate_hz), throttle, log
         self.last_proc = -1e9
         self.arr = None
+        self.sel = PrioritySelector(priority or PriorityConfig())  # fresh per clip: clip clock starts at 0
+        self.target_id = None
         reset_pipeline(pipe)
 
     def step(self, frame, idx: int, dup: bool = False):
@@ -223,7 +232,14 @@ class ClipRunner:
         if processed:
             self.last_proc = t
             self.arr = self.pipe.process(frame, t)
-        self.log.add_frame(idx, t, self.arr if processed else None, processed, dup)
+            st = self.sel.update(self.arr, t)
+            self.target_id = st.target_id if st.has_target else None
+            target = {"target_id": self.target_id}
+            if st.last_event:
+                target["target_event"] = TargetEvent(st.last_event).name
+        else:
+            target = {"target_id": self.target_id}
+        self.log.add_frame(idx, t, self.arr if processed else None, processed, dup, target)
         return processed, self.arr
 
     def close(self) -> dict:

@@ -176,3 +176,18 @@ def test_none_clip_has_no_confirm_events(tmp_path):
     assert not [e for e in evs if e["event"] == "confirm"]
     # false confirms per 10 min = confirm events / (duration_s / 600): computable from footer + events alone
     assert footer["duration_s"] > 0
+
+
+# ---------------------------------------------------------------- priority target in events (S5 flicker input)
+def test_events_carry_target_id_and_flicker_is_measurable(tmp_path):
+    import eval_clips
+    rec, footer = record(tmp_path, make_pipe(), n_wall=90)
+    ev = clip_io.load_events(rec.dir / "events.jsonl")
+    frames = [e for e in ev if e["type"] == "frame"]
+    assert all("target_id" in f for f in frames)
+    proc = [f for f in frames if f["processed"]]
+    ids = {f["target_id"] for f in proc}
+    assert ids - {None}, "a confirmed smoker should become the target"
+    assert any(f.get("target_event") == "ACQUIRED" for f in proc)
+    ser = eval_clips.target_ids(proc)
+    assert ser is not None and eval_clips.flicker_count(ser) == 0
