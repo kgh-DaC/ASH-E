@@ -794,7 +794,7 @@ def main(argv=None, P: Optional[Paths] = None, make_pipe_fn=None, replay_fn=None
     ap.add_argument("--clips-dir", default=None, help="folder tree with clips (default data/eval/dev)")
     ap.add_argument("--final", action="store_true", help="HOLD-OUT evaluation (hash-verified, logged)")
     ap.add_argument("--pose", default=str(ROOT / "models/pose.onnx"))
-    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi.onnx"))
+    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi_v3.onnx"))
     ap.add_argument("--config", default=None)
     ap.add_argument("--rate", type=float, default=None, help="process rate Hz for replay (default cfg.process_rate_hz)")
     ap.add_argument("--no-throttle", action="store_true")

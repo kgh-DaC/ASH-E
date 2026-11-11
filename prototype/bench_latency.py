@@ -197,7 +197,7 @@ def run(args) -> dict:
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--pose", default=str(ROOT / "models/pose.onnx"))
-    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi.onnx"))
+    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi_v3.onnx"))
     ap.add_argument("--config", default=None)
     ap.add_argument("--clip", default=None, help="optional dev clip mp4 (frames loop); default synthetic frames")
     ap.add_argument("--n", type=int, default=200)

@@ -405,3 +405,47 @@ python prototype/paper_report.py --demo                # 합성 입력 -> _works
   - 주원인은 **휴대폰 모서리**(P01이 거의 모든 장면에서 휴대폰을 듦)와 펜·막대류다.
   - 즉 학습 음성 데이터는 대체로 맞다. 휴대폰이 가장 큰 혼동 요인이다.
 - 결정 보류: 기본 모델을 바꿀지는 검수한 dev 라벨이 생긴 뒤에 정한다. 실험 모델을 웹캠에서 보려면 `run_webcam.py --cig-model models\cig_roi_v3exp.onnx`.
+
+## 2026-11-11 2차 학습 (검수 라벨) [실행 확인]
+
+- 데이터: `training/build_roi_own_reviewed.py --pid P01 --clean` -> `data/roi_own_p01_reviewed`, 병합 설정 `data/roi_ds_v3.yaml`(roi_ds_v2 + 이 데이터). `make_splits.py`는 쓰지 않았다: holdout P03의 라벨 프레임이 `data/labeled`에 없어 실행이 중단되기 때문이다. P01은 전부 학습 인원이라 `data/labeled/P01`을 직접 읽고, 시나리오별 20프레임 블록 단위로 5번째 블록을 val로 나눈다(실험 때와 같은 규칙). `own_subject` 필터 유지, `refuse_holdout` 적용, `data/roi_ds` 미접촉.
+- 프레임 선정(`select_frames`, 단위 시험 추가): holding·mouth는 review_state가 ok이고 라벨 박스가 있는 프레임만. 제외: ignore 5장(holding 3 + mouth 2), 미검수 holding 12장. none/similar/gesture는 ignore 제외 전부를 음성 ROI로(휴대폰·펜 포함). 박스가 확정된 holding·mouth 프레임의 박스 없는 ROI도 음성으로 쓴다(검수된 라벨이 정답이라서).
+- P01 ROI 구성 (train / val): 양성 1930 / 168, 음성 8414 / 521 (이 중 holding·mouth 장면의 박스 없는 ROI 음성 2087 / 123, none·similar·gesture 장면 음성 6327 / 398). 이전 실험(양성 1461, 음성 6328)보다 양성 +32%, 음성 +33%. 의사 라벨과 달리 1차가 못 잡던 양성(원거리 등)도 들어간다. roi_ds_v2 부분은 그대로.
+- 학습: 1차 best.pt(`cig_roi_v2/weights/best.pt`)에서 이어 30 에폭, patience 10, 나머지 실험과 동일 설정. 89분(5351 s), 조기 종료 없이 30 에폭 완주. best = 23 에폭(results.csv 1부터): val(roi_ds_v2 val + P01 val) mAP50 0.714, P 0.829, R 0.633. 이 val은 P01 ROI가 섞여 있어 1차(0.750)와 직접 비교할 수 없다. 결과물 `models/cig_roi_v3.onnx`. 기본 `cig_roi.onnx` 미변경.
+- 평가(dev P02 366장, 검수 라벨, 프레임 단위, raw 상태, 운영 임계값 0.35). `eval_images.py --cig-model models/cig_roi_v3.onnx --tag p02_reviewed_v3`:
+
+| 지표 | 1차 | v3exp(의사 라벨) | v3(검수 라벨) |
+| --- | --- | --- | --- |
+| binary P / R | 0.528 / 0.460 | 0.599 / 0.439 | 0.638 / 0.444 |
+| P <= 4 m | 0.507 | 0.585 | 0.615 |
+| R <= 3 m | 0.978 | 0.935 | 0.913 |
+| R 3-5 m | 0.507 | 0.466 | 0.425 |
+| smoking/holding 정확도 | 0.953 | 0.976 | 0.952 |
+| FP: similar / gesture / plain / cigarette | 44 / 18 / 12 / 3 | 33 / 17 / 5 / 0 | 25 / 16 / 5 / 1 |
+| FP 합계 | 77 | 55 | 47 |
+
+- 임계값 스윕(`prototype/sweep_dev_thresholds.py`, 같은 366장, 프레임별 raw 상태, 결과 `_workspace/eval_out/sweep_dev_thresholds.json`). P / R:
+
+| 임계값 | 1차 | v3exp | v3 |
+| --- | --- | --- | --- |
+| 0.25 | 0.526 / 0.540 | 0.574 / 0.476 | 0.619 / 0.556 |
+| 0.35 | 0.525 / 0.455 | 0.599 / 0.439 | 0.636 / 0.439 |
+| 0.45 | 0.544 / 0.396 | 0.615 / 0.385 | 0.635 / 0.353 |
+| 0.55 | 0.602 / 0.332 | 0.674 / 0.321 | 0.662 / 0.283 |
+| 0.65 | 0.680 / 0.182 | 0.746 / 0.251 | 0.700 / 0.187 |
+
+  (0.35에서 eval_images 값과 소수 셋째 자리까지 일부 다른 것은 스윕이 박스 conf 기준으로 다시 계산하기 때문이다.)
+- 해석:
+  - v3는 1차 대비 오검출이 크게 줄었다(FP 77 -> 47, similar_object 44 -> 25). 같은 recall(0.44)에서 정밀도 0.53 -> 0.64. 낮은 임계값(0.25~0.35)에서 세 모델 중 가장 낫고, 0.25에서는 P 0.619 / R 0.556으로 1차(0.526 / 0.540)를 둘 다 앞선다. 0.55 이상에서는 v3exp가 더 낫다.
+  - 그러나 **근거리 recall은 1차보다 떨어졌다**(R<=3m 0.978 -> 0.913, 3-5 m 0.507 -> 0.425). 원거리(4 m 이상)는 여전히 recall 0.15 안팎으로 사실상 못 잡는다. 검수 라벨 양성에 원거리가 더 들어갔는데도 P01 학습만으로는 P02 원거리까지 일반화되지 않았다(참가자 1명 학습의 한계, 담배 크기 대비 ROI 해상도 문제 가능).
+  - 합격선 비교(참고, dev 프레임 단위): P<=4m 0.615 (목표 0.9)와 R 3-5 m 0.425 (목표 0.6) 미달, R<=3m·smoking/holding은 충족. 안정화 후 클립 지표가 아니므로 판정 아님.
+  - 남은 오검출은 similar_object 25 + gesture 16이 대부분. P02 음성 장면에 실제 담배가 있었다는 발견은 검수 라벨(366장)로 반영됐고 FP 'cigarette' 1건만 남았다.
+- 권고(결정 아님): 오검출 감소가 주 목표면 v3를 기본 후보로 올릴 만하다. 단 근거리 recall 하락(R<=3m 0.913)과 단일 참가자 학습·단일 dev 참가자 평가라는 불확실성이 있어, 교체 전에 dev 클립 평가(`eval_clips.py`, 안정화 포함)로 확인하고 필요하면 임계값 0.25~0.30 운용을 같이 보는 것이 좋다. 원거리 recall은 모델이 아니라 데이터(원거리 양성 추가 촬영 또는 원거리용 크롭 확대 ROI) 문제로 보인다. hold-out(P03)은 건드리지 않았다.
+- 웹캠에서 보려면 `run_webcam.py --cig-model models\cig_roi_v3.onnx`.
+
+### 2026-11-11 15시: hold-out 잠금, 기본 모델 전환
+- 사용자가 P03 평가 라벨 318장을 검수함(모두 reviewed). `lock_acceptance.py --create`: 637개 파일, verify 통과.
+- 사용자 결정으로 기본 담배 모델을 `models/cig_roi_v3.onnx`로 바꿈: run_webcam, eval_images, eval_clips, bench_latency, `ash_e_core` config. prelabel, build_roi_own_pseudo, export_onnx의 기본값은 1차 모델 그대로 둠(재현성 때문).
+- P02 gesture 장면 33장의 smoking 라벨은 사용자가 맞다고 확인함.
+- 나중에 `data/eval/holdout`에 클립을 추가해도 이미지 매니페스트 verify는 깨지지 않음(매니페스트에 적힌 파일만 확인). 클립 목록은 첫 `eval_clips.py --final` 때 고정됨.
+- pytest 102개 통과.

@@ -42,3 +42,19 @@ def test_only_edge_people_drop_frame():
 
 def test_no_people():
     assert own_subject([], W) == []
+
+
+def test_select_frames_review_state():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_roi_own_reviewed import select_frames
+    fr = [("P01/S1/holding/a.jpg", "/a", "holding"), ("P01/S1/holding/b.jpg", "/b", "holding"),
+          ("P01/S1/mouth/c.jpg", "/c", "mouth"), ("P01/S1/mouth/d.jpg", "/d", "mouth"),
+          ("P01/S1/none/e.jpg", "/e", "none"), ("P01/S1/similar/f.jpg", "/f", "similar"),
+          ("P01/S1/holding/g.jpg", "/g", "holding")]
+    state = {"P01/S1/holding/a.jpg": "ok", "P01/S1/holding/b.jpg": "ignore", "P01/S1/mouth/c.jpg": "ok",
+             "P01/S1/mouth/d.jpg": "ok"}
+    keep, drop = select_frames(fr, state, {"/f"}, lambda p: p != "/d")
+    assert [k[1] for k in keep] == ["/a", "/c", "/e"]
+    assert drop["state_ignore"] == 1 and drop["unreviewed"] == 1 and drop["ok_but_boxless"] == 1 and drop["ignored"] == 1

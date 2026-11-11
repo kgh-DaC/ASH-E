@@ -9,7 +9,7 @@
         # labels.json template go to data/raw_clips/<PID>/<SESSION>/<scenario>_<NNN>/ (see prototype/clip_io.py)
   python prototype/run_webcam.py --replay data/raw_clips/P01/S1/mouth_001/clip.mp4   # re-run the models, no camera
 
-Models: models/pose.onnx (YOLO11n-pose, 320) and models/cig_roi.onnx (trained ROI detector). If a model is missing the
+Models: models/pose.onnx (YOLO11n-pose, 320) and models/cig_roi_v3.onnx (trained ROI detector, pass-2 default since 2026-11-11). If a model is missing the
 program still starts and shows "NO MODEL" on screen (Korean text cannot be drawn by cv2, so the banner is ASCII; the
 console prints the Korean message). If models/pose.onnx is missing it is exported once from yolo11n-pose.pt through
 ultralytics (auto-download of the .pt from the ultralytics release if needed) -- the download is logged to the console.
@@ -73,7 +73,7 @@ def main():
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--config", default=None)
     ap.add_argument("--pose", default=str(ROOT / "models/pose.onnx"))
-    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi.onnx"))
+    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi_v3.onnx"))
     ap.add_argument("--rate", type=float, default=None, help="processing rate Hz (default process_rate_hz=8, RPi5-like)")
     ap.add_argument("--priority-config", default=None, help="priority yaml (weights, ranges, hysteresis)")
     ap.add_argument("--no-priority", action="store_true", help="hide the target selection overlay")

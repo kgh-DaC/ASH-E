@@ -415,7 +415,7 @@ def main():
     ap.add_argument("--clips", action="store_true", help="also/only evaluate clips under data/eval/<split>/clips")
     ap.add_argument("--final", action="store_true", help="hold-out evaluation (hash-verified, logged)")
     ap.add_argument("--pose", default=str(ROOT / "models/pose.onnx"))
-    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi.onnx"))
+    ap.add_argument("--cig-model", default=str(ROOT / "models/cig_roi_v3.onnx"))
     ap.add_argument("--config", default=None, help="perception yaml (thresholds, radii, ...)")
     ap.add_argument("--make-demo-cigdet", type=int, default=0, metavar="N")
     ap.add_argument("--clips-dir", default=None, help="folder with clips/ and labels/ (default data/eval/dev)")

@@ -10,7 +10,7 @@ import yaml
 @dataclass
 class PerceptionConfig:
     pose_model_path: str = "models/pose.onnx"
-    cig_model_path: str = "models/cig_roi.onnx"
+    cig_model_path: str = "models/cig_roi_v3.onnx"
     backend: str = "onnxruntime"
     num_threads: int = 4
     pose_input: int = 320
