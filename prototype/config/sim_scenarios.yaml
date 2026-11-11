@@ -1,0 +1,153 @@
+# Fake multi-person scenarios for prototype/sim_priority.py (spec A9). Pure data; also meant to be replayed by the
+# stage-B fake_detections_pub (spec B7). Times in seconds, distance in metres (proxy distance), bearing in degrees
+# (positive = left of the optical axis, same sign convention as Detection.bearing_rad).
+#
+# Track fields
+#   id          track_id
+#   presence    [[t0, t1], ...]  intervals during which the track appears in the DetectionArray
+#   state       [[t, none|holding|smoking], ...]  step function (value holds until the next entry)
+#   distance    [[t, m], ...]  linear interpolation, held at the ends
+#   bearing_deg [[t, deg], ...]  linear interpolation (default 0)
+#   conf        state_confidence, number or [[t, v], ...] (default 0.9)
+#   wobble      {amp_m, period_s, phase_rad}  added to distance (sinusoid)
+#   stationary  true -> stationary_s = time since the current presence interval began (default true)
+# Scenario fields
+#   duration_s, rate_hz (default 8 = process_rate_hz), seed, noise {dist_sigma_m, conf_sigma, bearing_sigma_deg}
+#   departures  [{track_id, t}]  moments the current target "leaves" (reported as switch delay: first later frame whose
+#               target is another track). t is chosen by hand from the track definition (see each comment).
+#   expect      free text, what a sensible selector should do (documentation only)
+scenarios:
+
+  s5_mixed:
+    description: "S5-like: one smoker + one non-smoker, roles swap at t=20 s (smoker stops, the other lights up)"
+    duration_s: 45
+    seed: 1
+    noise: {dist_sigma_m: 0.05, conf_sigma: 0.03, bearing_sigma_deg: 0.5}
+    departures:
+      - {track_id: 1, t: 20.0}   # id 1 stops smoking at 20 s
+    expect: "target 1 first; non-smoker never targeted before 20 s; one handover after the swap; no flicker"
+    tracks:
+      - id: 1
+        presence: [[0, 45]]
+        state: [[0, smoking], [20, none]]
+        distance: [[0, 2.5]]
+        bearing_deg: [[0, 8]]
+        conf: 0.88
+      - id: 2
+        presence: [[0, 45]]
+        state: [[0, none], [20, smoking]]
+        distance: [[0, 1.8]]
+        bearing_deg: [[0, -10]]
+        conf: 0.85
+
+  two_smokers_close:
+    description: "Two smokers at similar distance; distances wobble in antiphase so the leader keeps changing (flicker bait)"
+    duration_s: 60
+    seed: 2
+    noise: {dist_sigma_m: 0.08, conf_sigma: 0.05, bearing_sigma_deg: 1.0}
+    expect: "one acquisition, no SWITCHED_BETTER (score gap stays under switch_margin)"
+    tracks:
+      - id: 1
+        presence: [[0, 60]]
+        state: [[0, smoking]]
+        distance: [[0, 2.6]]
+        wobble: {amp_m: 0.4, period_s: 6, phase_rad: 0.0}
+        bearing_deg: [[0, 5]]
+        conf: 0.88
+      - id: 2
+        presence: [[0, 60]]
+        state: [[0, smoking]]
+        distance: [[0, 2.6]]
+        wobble: {amp_m: 0.4, period_s: 6, phase_rad: 3.14159}
+        bearing_deg: [[0, -5]]
+        conf: 0.88
+
+  two_smokers_stress:
+    description: "Stress: two smokers, distance wobble 1.5 m (period 5 s, antiphase) so the score gap exceeds switch_margin for ~2 s at a time"
+    duration_s: 60
+    seed: 3
+    noise: {dist_sigma_m: 0.15, conf_sigma: 0.10, bearing_sigma_deg: 2.0}
+    expect: "informational: how many switches the hysteresis lets through when the wobble is larger than the margin"
+    tracks:
+      - id: 1
+        presence: [[0, 60]]
+        state: [[0, smoking]]
+        distance: [[0, 3.0]]
+        wobble: {amp_m: 1.5, period_s: 5, phase_rad: 0.0}
+        conf: 0.80
+      - id: 2
+        presence: [[0, 60]]
+        state: [[0, smoking]]
+        distance: [[0, 3.0]]
+        wobble: {amp_m: 1.5, period_s: 5, phase_rad: 3.14159}
+        conf: 0.80
+
+  target_departs:
+    description: "Target walks away (3 m -> 7 m, 0.4 m/s from t=10) and a holder and a smoker remain; selector must hand over"
+    duration_s: 40
+    seed: 4
+    noise: {dist_sigma_m: 0.05, conf_sigma: 0.03, bearing_sigma_deg: 0.5}
+    departures:
+      - {track_id: 1, t: 10.0}   # starts walking away at 10 s
+    expect: "ACQUIRED id 1 (closest smoker); once id 1 recedes, a better candidate takes over via SWITCHED_BETTER before the out-of-range release"
+    tracks:
+      - id: 1
+        presence: [[0, 40]]
+        state: [[0, smoking]]
+        distance: [[0, 3.0], [10, 3.0], [20, 7.0]]
+        stationary: false
+        conf: 0.9
+      - id: 2
+        presence: [[0, 40]]
+        state: [[0, smoking]]
+        distance: [[0, 4.0]]
+        bearing_deg: [[0, 15]]
+        conf: 0.85
+      - id: 3
+        presence: [[0, 40]]
+        state: [[0, holding]]
+        distance: [[0, 3.0]]
+        bearing_deg: [[0, -15]]
+        conf: 0.8
+
+  target_departs_oor:
+    description: "Target walks out of range (3 m -> 7 m from t=10) while the only other candidate is a weak smoker at 4.9 m (no better-by-margin), so the release path OUT_OF_RANGE is exercised"
+    duration_s: 40
+    seed: 6
+    noise: {dist_sigma_m: 0.03, conf_sigma: 0.02, bearing_sigma_deg: 0.3}
+    departures:
+      - {track_id: 1, t: 17.0}   # 3 + 0.4*(17-10) = 5.8 m = release_range_m (then out_of_range_hold_s = 1 s)
+    expect: "OUT_OF_RANGE ~18 s (1 s after crossing 5.8 m), id 2 acquired in the same evaluation"
+    tracks:
+      - id: 1
+        presence: [[0, 40]]
+        state: [[0, smoking]]
+        distance: [[0, 3.0], [10, 3.0], [20, 7.0]]
+        conf: 0.9
+      - id: 2
+        presence: [[0, 40]]
+        state: [[0, smoking]]
+        distance: [[0, 4.9]]
+        bearing_deg: [[0, 15]]
+        conf: 0.85
+
+  target_dropout_reappear:
+    description: "Target id 1 disappears 1.2 s (below lost_timeout) at 10 s, then 4 s at 20 s (LOST), returns at 24 s while id 2 is the target"
+    duration_s: 50
+    seed: 5
+    noise: {dist_sigma_m: 0.05, conf_sigma: 0.03, bearing_sigma_deg: 0.5}
+    departures:
+      - {track_id: 1, t: 20.0}   # vanishes at 20 s, LOST_TIMEOUT after lost_timeout_s
+    expect: "short dropout: no change. long dropout: LOST_TIMEOUT -> id 2. id 1 back at 24 s sits in a 10 s ID cooldown, then may win back only if better by the margin for 1 s (and min_hold)"
+    tracks:
+      - id: 1
+        presence: [[0, 10], [11.2, 20], [24, 50]]
+        state: [[0, smoking]]
+        distance: [[0, 2.0]]
+        conf: 0.9
+      - id: 2
+        presence: [[0, 50]]
+        state: [[0, smoking]]
+        distance: [[0, 3.6]]
+        bearing_deg: [[0, 12]]
+        conf: 0.85
