@@ -63,14 +63,14 @@ def save_sample(out_dir: Path, split: str, name: str, crop, boxes):
     (out_dir / "labels" / split / (name + ".txt")).write_text("\n".join(lines) + ("\n" if lines else ""))
 
 
-def process_image(img, boxes, pose: PoseModel, cfg, rng, jitter, include_full, train, primary_only=False):
+def process_image(img, boxes, pose: PoseModel, cfg, rng, jitter, include_full, train, primary_only=False, bystanders_ok=False):
     """Yields (suffix, crop, boxes_in_crop, status). primary_only (own captures): ROIs of the single subject only,
     no whole-frame sample (it would contain the third party), frame dropped when the subject is ambiguous."""
     H, W = img.shape[:2]
     out = []
     persons = pose.detect(img)
     if primary_only:
-        persons = own_subject(persons, W)
+        persons = own_subject(persons, W, bystanders_ok)
         include_full = False
     if include_full:
         out.append(("full", img, [b.copy() for b in boxes], "pos" if boxes else "neg"))

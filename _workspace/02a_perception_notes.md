@@ -449,3 +449,22 @@ python prototype/paper_report.py --demo                # 합성 입력 -> _works
 - P02 gesture 장면 33장의 smoking 라벨은 사용자가 맞다고 확인함.
 - 나중에 `data/eval/holdout`에 클립을 추가해도 이미지 매니페스트 verify는 깨지지 않음(매니페스트에 적힌 파일만 확인). 클립 목록은 첫 `eval_clips.py --final` 때 고정됨.
 - pytest 102개 통과.
+
+## 2026-11-12 클립 녹화분 접수, 정답 초안, P02 dev 클립 평가
+
+- 접수: `data/raw_clips/P02/S1` 13개(9.0분), `data/raw_clips/P03/S1` 12개(8.6분), `data/raw/P01/S2` 510장(holding 1·2·3 m 270, mouth 3·4 m 240). 클립은 1280x720, 15 fps, 모두 재생된다.
+- 녹화 PC에 `cig_roi_v3.onnx`가 없어서(`models_ready.cigarette=false`) 실시간 `events.jsonl`에는 담배 판정이 없다. 평가는 `clip.mp4`를 다시 돌리므로 결과에는 영향이 없다. 녹화 중 화면에 "흡연자" 표시가 한 번도 안 뜬 이유가 이것이다.
+- 정답 초안 도구 `prototype/fill_clip_labels.py` 추가(테스트 11개). 시나리오 이름 → 클립 전체 1구간, 사람 박스는 실시간 events에서 가장 오래 추적된 사람의 첫 박스, 거리 태그는 클립 번호. 예외는 `data/raw_clips/label_overrides.json`(side 클립 2개: 16.3 s 이후 등을 돌려 담배가 안 보임 → none + occluded). 25개 전부 초안(`reviewed: false`), 확인용 이미지는 `data/label_check/`.
+- mouth·walking·side는 클립 전체를 smoking으로 둔다(손을 내린 구간 포함). 그래서 이 클립들의 smoking/holding 정확도는 근사값이다.
+- 제3자: P02 클립 8개(holding 2, mouth_002·003, none, similar 3)와 P01/S2 프레임에 동의 여부가 확인되지 않은 사람이 찍혔다. P03 클립에는 없다(side_001 오른쪽 아래에 손만 보임). `prelabel.py --src data/raw/P01/S2 --model models/cig_roi_v3.onnx` 결과 510장 중 390장이 2명 이상으로 제외됐다(mouth 236/240). 처리 방법은 사용자 결정 대기.
+- P02 dev 클립 평가(`eval_clips.py --clips-dir data/raw_clips/P02 --tag dev_p02_v3`, 초안 라벨, 판정 아님): 정밀도(≤4 m) 0.524, 재현율(≤3 m) 0.696, 재현율(3–5 m) 0.541, smoking/holding 0.967, 유사물 오확정 5회/4.0분(10분당 12.5), 확정 시간 중앙값 0.53 s. holding_001과 side_001은 한 번도 확정되지 않았다.
+- 원인: 오확정 6건은 모두 holding 상태다(펜·휴대폰을 손에 든 장면). raw 신뢰도 중앙값이 유사물 0.51~0.55, 실제 holding_002 0.46, mouth_002 0.48로 겹쳐서 `cig_conf_thresh`로는 가를 수 없다(0.5로 올리면 similar_001은 프레임의 45%가 남고 holding_002·mouth_002·003은 16~24%로 떨어진다). 입 근처 smoking 판정은 음성 클립에서 0건이다.
+- 프록시 거리: 옆모습에서 13~48 m로 튄다(side_001). 앉은 사람도 같은 자리에서 2.2↔3.7 m로 흔들린다. 거리 구간별 지표가 이 값에 의존한다.
+- hold-out(P03): 클립은 `data/raw_clips`에 그대로 있다. `--final`은 실행하지 않았다.
+
+### 2026-11-12 추가: 제3자 동의 확인 반영, 프록시 거리 수정
+- 사용자 확인: P01/S2 프레임과 P02 클립에 찍힌 다른 사람들은 촬영에 동의했다. `data/splits/bystander_consent.json`에 `P01/S2`를 기록했다.
+- `dataset_utils.own_subject(persons, width, bystanders_ok)` + `bystanders_consented(path)`: 동의가 기록된 세션에서는 가장자리에 걸린 사람을 무시하고 화면 안에 온전히 보이는 사람 중 가장 큰 사람을 촬영 대상으로 삼는다. 학습에는 여전히 대상의 ROI만 쓴다. `prelabel.py`, `review_labels.py`, `build_roi_own_reviewed.py`(→ `process_image`)에 연결. 기록이 없는 세션(P01/S1 등)은 기존 엄격 규칙 그대로다.
+- `prelabel.py --src data/raw/P01/S2 --model models/cig_roi_v3.onnx` 재실행: 510장 전부 포함(제외 0). 모델이 박스를 낸 프레임은 224장(44%), 못 낸 프레임 286장. `review_queue_P01.csv` 앞쪽에 S2 510행을 넣었다(이전 목록은 `review_queue_P01_S1only_backup.csv`).
+- `distance.proxy_position`: 박스가 위·아래로 잘렸을 때 어깨·머리 기반 추정값을 `fy * person_height_m / 박스 높이`(상한)로 제한한다. 옆모습에서 두 어깨가 겹쳐 13~48 m로 나오던 문제의 수정이다. 테스트 1개 추가, 기존 1개는 조건을 조정. 전체 137개 통과.
+- 수정 후 P02 재평가(`--tag dev_p02_v3_distfix`): side_001 추정 거리 중앙값 4.2 m(최대 100 m 이상) → 2.3 m. 그 결과 놓친 옆모습 프레임이 3 m 이내 구간에 들어와 재현율(≤3 m)이 0.696 → 0.545로 바뀌었다. 나머지: 정밀도 0.524, 재현율(3–5 m) 0.539, 유사물 오확정 10분당 12.5 (변화 없음).

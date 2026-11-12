@@ -26,6 +26,11 @@ def proxy_position(pose: PersonPose, intr: CameraIntrinsics, cfg, img_h: int):
         z = intr.fx * cfg.shoulder_width_m / abs(float(kp[LSH, 0] - kp[RSH, 0]))
     else:
         z = intr.fx * cfg.head_width_m / max(head_size(pose, t), 1.0)
+    if not (y1 >= m and y2 <= img_h - 1 - m):
+        # A box cut off at the top/bottom shows only part of the person, so the height formula gives an UPPER bound on
+        # the distance. It caps the shoulder/head estimates, which explode when the person stands sideways (the two
+        # shoulders overlap in the image: 13-48 m measured for a person 2 m away, P02 side clip, 2026-11-12).
+        z = min(z, intr.fy * cfg.person_height_m / bh)
     uc, vc = (x1 + x2) / 2.0, (y1 + y2) / 2.0
     return _finish((uc - intr.cx) * z / intr.fx, (vc - intr.cy) * z / intr.fy, z, DistanceSource.PROXY)
 

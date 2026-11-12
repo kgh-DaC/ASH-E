@@ -24,7 +24,7 @@ import cv2
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "training"))
-from dataset_utils import own_subject, list_images, write_yolo  # noqa: E402
+from dataset_utils import bystanders_consented, own_subject, list_images, write_yolo  # noqa: E402
 
 from ash_e_core.backends import load_model  # noqa: E402
 from ash_e_core.config import PerceptionConfig  # noqa: E402
@@ -67,7 +67,7 @@ def main():
         img = cv2.imread(str(img_path))
         H, W = img.shape[:2]
         detected = pose.detect(img)
-        persons = own_subject(detected, W)  # third party in frame (capture QC 2026-11-10)
+        persons = own_subject(detected, W, bystanders_consented(img_path))  # third party in frame (capture QC 2026-11-10)
         if detected and not persons:
             excluded.append(rel.as_posix())  # 2+ fully visible people: subject ambiguous -> not copied, not labelled
             stats[scenario]["excluded_multi_person"] += 1

@@ -107,7 +107,7 @@ EDGE_FRAC = 0.02  # bbox within 2% of the left/right border counts as "cut off a
 EDGE_VISIBLE_KPTS = 8  # edge person with >= this many joints (conf >= 0.5) makes the frame ambiguous
 
 
-def own_subject(persons, width: int):
+def own_subject(persons, width: int, bystanders_ok: bool = False):
     """Own captures only (protocol: ONE consenting subject per capture.py session). Returns [subject] when exactly one
     person is fully inside the frame (people cut off at the left/right border are ignored), else [] = drop the frame.
     Capture QC 2026-11-10: an unconsented third party (black padded jacket) sits at the right border in 43-100% of
@@ -119,4 +119,27 @@ def own_subject(persons, width: int):
     # An edge-cut person with many visible joints is a real candidate (e.g. P01 half out of frame at the left edge while
     # the third party stands inside): ambiguous -> drop. Seated third party at the border: median 3 visible joints.
     big_edge = [p for p in persons if all(p is not q for q in inner) and int((p.keypoints[:, 2] >= 0.5).sum()) >= EDGE_VISIBLE_KPTS]
+    if bystanders_ok:
+        # The other people in this session consented (bystanders_consented): nothing has to be dropped for privacy, so
+        # edge-cut people are simply ignored and the largest fully-visible person is taken as the subject. Only the
+        # subject's ROIs are used; a human still reviews every positive frame.
+        return [max(inner, key=lambda p: (p.bbox_xyxy[2] - p.bbox_xyxy[0]) * (p.bbox_xyxy[3] - p.bbox_xyxy[1]))] if inner else []
     return inner if len(inner) == 1 and not big_edge else []
+
+
+CONSENT_FILE = "data/splits/bystander_consent.json"  # {"sessions": ["P01/S2"], "note": "..."}; git-ignored like all of data/
+
+
+def bystanders_consented(path, root=None) -> bool:
+    """True when the frame lies in a capture session (<PID>/<SESSION> path elements) whose bystanders consented to be
+    recorded, as listed in data/splits/bystander_consent.json. Missing file or session -> False (strict filter)."""
+    root = Path(root) if root is not None else ROOT
+    f = root / CONSENT_FILE
+    if not f.is_file():
+        return False
+    try:
+        sessions = set(json.loads(f.read_text(encoding="utf-8")).get("sessions", []))
+    except ValueError:
+        return False
+    parts = Path(path).parts
+    return any("%s/%s" % (a, b) in sessions for a, b in zip(parts, parts[1:]))

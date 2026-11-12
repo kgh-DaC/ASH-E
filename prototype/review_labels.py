@@ -29,7 +29,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "training"))
-from dataset_utils import own_subject, read_yolo, write_yolo  # noqa: E402
+from dataset_utils import bystanders_consented, own_subject, read_yolo, write_yolo  # noqa: E402
 
 WIN = "ASH-E label review"
 VIEW_W, VIEW_H = 1100, 760
@@ -152,7 +152,7 @@ def review(pid, redo, pose):
                 i += 1
                 continue
             H, W = img.shape[:2]
-            ps = own_subject(pose.detect(img), W) if pose is not None else []
+            ps = own_subject(pose.detect(img), W, bystanders_consented(p)) if pose is not None else []
             person_box = ps[0].bbox_xyxy if ps else None
             ui.update(boxes=[b for c, b in read_yolo(p.with_suffix(".txt"), W, H) if c == 0], added=[], dirty=False)
             loaded = i

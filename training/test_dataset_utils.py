@@ -58,3 +58,23 @@ def test_select_frames_review_state():
     keep, drop = select_frames(fr, state, {"/f"}, lambda p: p != "/d")
     assert [k[1] for k in keep] == ["/a", "/c", "/e"]
     assert drop["state_ignore"] == 1 and drop["unreviewed"] == 1 and drop["ok_but_boxless"] == 1 and drop["ignored"] == 1
+
+
+def test_bystanders_ok_ignores_edge_person_and_takes_largest_inner():
+    from dataset_utils import own_subject as f
+    subj, edge = person(500, 800), person(1000, 1279, n_vis=12)        # seated bystander cut off at the right border
+    assert f([subj, edge], W) == [] and f([subj, edge], W, True) == [subj]
+    small = person(850, 950)
+    assert f([small, subj], W, True) == [subj]                           # two fully visible: the larger one
+    assert f([edge], W, True) == []                                      # nobody fully visible -> still dropped
+
+
+def test_bystanders_consented_reads_session_list(tmp_path):
+    from dataset_utils import bystanders_consented as c
+    p = tmp_path / "data/raw/P01/S2/mouth/x.jpg"
+    assert c(p, tmp_path) is False                                       # no file -> strict
+    (tmp_path / "data/splits").mkdir(parents=True)
+    (tmp_path / "data/splits/bystander_consent.json").write_text('{"sessions": ["P01/S2"]}')
+    assert c(p, tmp_path) is True
+    assert c(tmp_path / "data/labeled/P01/S2/holding/y.jpg", tmp_path) is True
+    assert c(tmp_path / "data/raw/P01/S1/mouth/x.jpg", tmp_path) is False

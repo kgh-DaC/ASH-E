@@ -232,12 +232,19 @@ def test_proxy_full_body_and_bearing_sign():
 
 
 def test_proxy_cropped_uses_shoulders_then_head():
-    p = make_pose(top=-5, h=800, kp="full")  # touches the top/bottom edge
+    p = make_pose(top=-5, h=300, kp="full")  # touches the top edge; the visible part is short, so the height cap is loose
     z_sh = INTR.fx * 0.40 / 80.0
     assert proxy_position(p, INTR, CFG, 720)[0].z == pytest.approx(z_sh)
     p.keypoints[5:7, 2] = 0
     z_head = INTR.fx * 0.15 / 50.0
     assert proxy_position(p, INTR, CFG, 720)[0].z == pytest.approx(z_head)
+
+
+def test_proxy_cropped_side_view_is_capped_by_box_height():
+    p = make_pose(top=-5, h=800, kp="full")  # sideways: shoulders almost overlap -> shoulder estimate explodes
+    p.keypoints[5, 0], p.keypoints[6, 0] = 640.0, 643.0
+    assert INTR.fx * 0.40 / 3.0 > 100
+    assert proxy_position(p, INTR, CFG, 720)[0].z == pytest.approx(INTR.fy * 1.65 / 800)
 
 
 def test_depth_median_filters_invalid_and_fallback():

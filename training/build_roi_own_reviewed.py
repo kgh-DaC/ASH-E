@@ -23,7 +23,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_roi_dataset import process_image, save_sample  # noqa: E402
-from dataset_utils import ROOT, own_subject, read_yolo, refuse_holdout  # noqa: E402
+from dataset_utils import ROOT, bystanders_consented, own_subject, read_yolo, refuse_holdout  # noqa: E402
 
 POSITIVE = {"holding", "mouth"}
 
@@ -105,7 +105,8 @@ def main():
                 continue
             H, W = img.shape[:2]
             boxes = [b for c, b in read_yolo(f.with_suffix(".txt"), W, H) if c == 0] if sc in POSITIVE else []
-            samples = process_image(img, boxes, pose, cfg, rng, a.jitter, False, split == "train", primary_only=True)
+            samples = process_image(img, boxes, pose, cfg, rng, a.jitter, False, split == "train", primary_only=True,
+                                    bystanders_ok=bystanders_consented(f))
             if not samples:
                 st["frame_no_subject_or_all_skipped"] += 1
                 continue
