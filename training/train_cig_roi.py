@@ -28,10 +28,23 @@ def main():
     ap.add_argument("--name", default="cig_roi")
     ap.add_argument("--smoke", action="store_true", help="tiny run on a 120-image subset, 1 epoch")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--resume", action="store_true",
+                    help="continue an interrupted run from training/runs/<name>/weights/last.pt (settings come from the checkpoint)")
     args = ap.parse_args()
     refuse_holdout(Path(args.data))
 
     from ultralytics import YOLO
+
+    if args.resume:
+        last = ROOT / "training/runs" / args.name / "weights/last.pt"
+        if not last.is_file():
+            sys.exit("no checkpoint to resume: %s" % last)
+        t0 = time.time()
+        YOLO(str(last)).train(resume=True)
+        print("TRAIN_WALL_SECONDS %.1f  (resumed)" % (time.time() - t0))
+        best = last.with_name("best.pt")
+        print("best weights:", best, best.is_file())
+        return
 
     data = Path(args.data)
     fraction = 1.0
