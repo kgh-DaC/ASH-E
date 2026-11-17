@@ -2,6 +2,8 @@
 
   python prototype/review_labels.py --pid P01                 # resumes at the first unreviewed frame
   python prototype/review_labels.py --pid P01 --redo          # walk through everything again
+  python prototype/review_labels.py --pid P01 --redo --session S1 --scenario holding   # re-check only part of it
+  python prototype/review_labels.py --pid P01 --only-ignored   # only frames marked ignore (i), to restore some
   python prototype/review_labels.py --selftest                # no GUI: coordinate/save checks
 
 Order = data/labeled/review_queue_<PID>.csv (missed-looking frames first, then lowest confidence).
@@ -10,6 +12,9 @@ The view is zoomed on the subject (pose model) so a cigarette at 4-5 m is big en
   mouse left-drag   draw a cigarette box          mouse right-click  delete the box under the cursor
   SPACE / ENTER     boxes are correct -> save, mark reviewed, next
   i                 cigarette < 30% visible -> mark IGNORE (frame left out of training, spec 9A.5), next
+  s                 not a cigarette (pen/straw/...) -> MOVE frame to <SESSION>/similar/ (empty label = hard negative), next
+  x                 nothing in hand / at mouth -> MOVE frame to <SESSION>/none/ (empty label = negative), next
+  h / m             wrong scene -> MOVE frame to <SESSION>/holding/ or mouth/ (keeps the boxes on screen, marks ok), next
   n / b             next / back without marking   u  undo last drawn box     c  clear all boxes
   z                 zoom: subject / tighter / full frame                      q / ESC  save and quit
 Decisions: data/labeled/review_state_<PID>.json (ok / ignore), ignore list: data/labeled/ignore.txt.
@@ -20,6 +25,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -101,12 +107,70 @@ def queue_images(pid):
         return [Path(r["image"]) for r in csv.DictReader(f)]
 
 
-def review(pid, redo, pose):
+def move_to_similar(img: Path, queue_csv: Path | None = None) -> Path:
+    return move_to_negative(img, "similar", queue_csv)
+
+
+def move_to_negative(img: Path, target: str, queue_csv: Path | None = None) -> Path:
+    """Move a frame to .../<S>/<target>/ (similar or none) with an EMPTY label (negative)."""
+    dst = move_frame(img, target, queue_csv)
+    dst.with_suffix(".txt").write_text("")
+    return dst
+
+
+def move_frame(img: Path, target: str, queue_csv: Path | None = None) -> Path:
+    """Move .../<S>/<scenario>/x.jpg (+ its .txt label) to .../<S>/<target>/ and rewrite the queue csv path.
+    New name: P01_S3_mouth_00012.jpg -> P01_S3_holding_00012_frommouth.jpg."""
+    scen = img.parent.name
+    dst_dir = img.parent.parent / target
+    dst_dir.mkdir(exist_ok=True)
+    if not (dst_dir / "classes.txt").is_file() and (img.parent / "classes.txt").is_file():
+        shutil.copy2(img.parent / "classes.txt", dst_dir / "classes.txt")
+    stem = img.stem.replace("_%s_" % scen, "_%s_" % target, 1) + "_from" + scen
+    dst = dst_dir / (stem + img.suffix)
+    if dst.exists():
+        raise FileExistsError(dst)
+    shutil.move(str(img), str(dst))
+    old_txt = img.with_suffix(".txt")
+    if old_txt.is_file():
+        shutil.move(str(old_txt), str(dst.with_suffix(".txt")))
+    if queue_csv is not None and queue_csv.is_file():
+        with open(queue_csv, encoding="utf-8", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        if rows:
+            for r in rows:
+                if Path(r["image"]) == img:
+                    r["image"] = str(dst)
+            with open(queue_csv, "w", encoding="utf-8", newline="") as fh:
+                w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+                w.writeheader()
+                w.writerows(rows)
+    return dst
+
+
+def only_ignored(imgs, state, key_of):
+    """Frames currently marked ignore. Snapshot taken once, so the list does not shrink while reviewing."""
+    return [p for p in imgs if state.get(key_of(p)) == "ignore"]
+
+
+def filter_queue(imgs, sessions=None, scenarios=None):
+    """Keep frames whose path has .../<SESSION>/<scenario>/<file> in the given sets (None = all)."""
+    return [p for p in imgs
+            if (not sessions or p.parent.parent.name in sessions) and (not scenarios or p.parent.name in scenarios)]
+
+
+def review(pid, redo, pose, sessions=None, scenarios=None, ignored_only=False):
     labeled = ROOT / "data/labeled"
     state_path, ignore_txt = labeled / ("review_state_%s.json" % pid), labeled / "ignore.txt"
     state = load_state(state_path)
-    imgs = queue_images(pid)
+    imgs = filter_queue(queue_images(pid), sessions, scenarios)
     key_of = lambda p: p.resolve().relative_to(labeled.resolve()).as_posix()  # noqa: E731
+    if ignored_only:
+        imgs, redo = only_ignored(imgs, state, key_of), True
+        print("%d frames marked ignore. SPACE = use for training again, i = keep ignored, n = skip" % len(imgs))
+    if not imgs:
+        print("no frames match --session/--scenario" + (" among ignored frames" if ignored_only else ""))
+        return
     i = 0 if redo else next((k for k, p in enumerate(imgs) if key_of(p) not in state), len(imgs))
     if i >= len(imgs):
         print("all %d frames already reviewed (use --redo to go through them again)" % len(imgs))
@@ -166,7 +230,7 @@ def review(pid, redo, pose):
         st = state.get(key_of(p), "-")
         hud = "%d/%d  %s  %s  boxes=%d  state=%s  zoom=%s%s" % (
             i + 1, len(imgs), p.parent.name, p.name, len(ui["boxes"]), st, ZOOMS[zoom], "  *edited*" if ui["dirty"] else "")
-        help_ = "drag=box  rclick=del  SPACE=ok  i=ignore(<30%)  n/b=next/back  u=undo  c=clear  z=zoom  q=quit"
+        help_ = "drag=box  rclick=del  SPACE=ok  i=ignore(<30%)  s/x/h/m=->similar/none/holding/mouth  n/b=next/back  u=undo  c=clear  z=zoom  q=quit"
         bar = np.zeros((48, canvas.shape[1], 3), np.uint8)
         cv2.putText(bar, hud, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(bar, help_, (6, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1, cv2.LINE_AA)
@@ -189,6 +253,29 @@ def review(pid, redo, pose):
             state[key_of(p)] = "ignore"
             save_state(state_path, state)
             i += 1
+        elif ch in (ord("s"), ord("x")) and p.parent.name != {ord("s"): "similar", ord("x"): "none"}[ch]:
+            target = {ord("s"): "similar", ord("x"): "none"}[ch]
+            if st == "ignore":
+                set_ignore(ignore_txt, p, False)
+            state.pop(key_of(p), None)
+            dst = move_to_negative(p, target, ROOT / "data/labeled" / ("review_queue_%s.csv" % pid))
+            state[key_of(dst)] = "ok"
+            save_state(state_path, state)
+            print("moved to %s:" % target, dst.name)
+            imgs[i] = dst
+            i += 1
+        elif ch in (ord("h"), ord("m")) and p.parent.name != {ord("h"): "holding", ord("m"): "mouth"}[ch]:
+            target = {ord("h"): "holding", ord("m"): "mouth"}[ch]
+            if st == "ignore":
+                set_ignore(ignore_txt, p, False)
+            state.pop(key_of(p), None)
+            dst = move_frame(p, target, ROOT / "data/labeled" / ("review_queue_%s.csv" % pid))
+            write_yolo(dst.with_suffix(".txt"), ui["boxes"], W, H)
+            state[key_of(dst)] = "ok"
+            save_state(state_path, state)
+            print("moved to %s:" % target, dst.name)
+            imgs[i] = dst
+            i += 1
         elif ch == ord("n"):
             i += 1
         elif ch == ord("b"):
@@ -205,7 +292,8 @@ def review(pid, redo, pose):
     cv2.destroyAllWindows()
     n_ok = sum(1 for v in state.values() if v == "ok")
     n_ig = sum(1 for v in state.values() if v == "ignore")
-    print("reviewed %d / %d (ok %d, ignore %d). state: %s" % (n_ok + n_ig, len(imgs), n_ok, n_ig, state_path))
+    print("all frames in state: %d reviewed (ok %d, ignore %d); this run showed %d. state: %s"
+          % (n_ok + n_ig, n_ok, n_ig, len(imgs), state_path))
 
 
 def selftest():
@@ -228,6 +316,32 @@ def selftest():
         assert ig.read_text(encoding="utf-8").splitlines() == [im.resolve().as_posix()]
         set_ignore(ig, im, False)
         assert ig.read_text(encoding="utf-8") == ""
+        hd = Path(d) / "S3" / "holding"
+        hd.mkdir(parents=True)
+        src = hd / "P01_S3_holding_00012.jpg"
+        src.write_bytes(b"x")
+        src.with_suffix(".txt").write_text("0 0.5 0.5 0.1 0.1\n")
+        q = Path(d) / "q.csv"
+        q.write_text("priority,max_conf,image,flag\n0,0.0,%s,\n" % src, encoding="utf-8")
+        dst = move_to_similar(src, q)
+        assert dst == Path(d) / "S3" / "similar" / "P01_S3_similar_00012_fromholding.jpg"
+        assert dst.is_file() and not src.exists() and not src.with_suffix(".txt").exists()
+        assert dst.with_suffix(".txt").read_text() == ""
+        assert str(dst) in q.read_text(encoding="utf-8")
+        md = Path(d) / "S3" / "mouth"
+        md.mkdir()
+        m = md / "P01_S3_mouth_00007.jpg"
+        m.write_bytes(b"x")
+        m.with_suffix(".txt").write_text("0 0.5 0.5 0.1 0.1\n")
+        h = move_frame(m, "holding")
+        assert h == hd / "P01_S3_holding_00007_frommouth.jpg" and h.is_file() and not m.exists()
+        assert h.with_suffix(".txt").read_text().startswith("0 ")
+        nn = move_to_negative(h, "none")
+        assert nn == Path(d) / "S3" / "none" / "P01_S3_none_00007_frommouth_fromholding.jpg" and nn.is_file()
+        assert nn.with_suffix(".txt").read_text() == "" and not h.exists()
+        ims = [Path(d) / "a.jpg", Path(d) / "b.jpg", Path(d) / "c.jpg"]
+        st = {"a.jpg": "ok", "b.jpg": "ignore"}
+        assert only_ignored(ims, st, lambda p: p.name) == [ims[1]]
     print("selftest ok")
 
 
@@ -235,6 +349,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pid", default="P01")
     ap.add_argument("--redo", action="store_true")
+    ap.add_argument("--session", default=None, help="only these sessions, e.g. S1 or S1,S2 (default all)")
+    ap.add_argument("--scenario", default=None, help="only these scenarios, e.g. holding or holding,mouth (default all)")
+    ap.add_argument("--only-ignored", action="store_true", help="show only frames marked ignore (implies starting from the first)")
     ap.add_argument("--no-pose", action="store_true", help="do not zoom on the subject (full frame only)")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
@@ -248,7 +365,8 @@ def main():
         pose = PoseModel(load_model(str(ROOT / "models/pose.onnx"), "onnxruntime", 4), PerceptionConfig(person_conf_thresh=0.30))
         if pose.is_stub:
             pose = None
-    review(a.pid, a.redo, pose)
+    split = lambda v: set(x.strip() for x in v.split(",") if x.strip()) if v else None  # noqa: E731
+    review(a.pid, a.redo, pose, split(a.session), split(a.scenario), a.only_ignored)
 
 
 if __name__ == "__main__":
