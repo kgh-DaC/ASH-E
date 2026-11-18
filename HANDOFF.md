@@ -1,6 +1,6 @@
 # ASH-E 인수인계 문서
 
-마지막 갱신: 2026-11-18 (v6 예비 합격 선언 → 단계 B ROS2 이식 코드 작성·Windows 검증 완료, RPi5 실행 대기)
+마지막 갱신: 2026-11-18 저녁 (v6 예비 합격 → 단계 B ROS2 이식 코드·Windows 검증 완료, README 6절 RPi5 설치 절차, 커밋 9c7f8fa. RPi5 실행 대기)
 
 > 다른 Claude 계정으로 로그인하면 이전 대화와 개인 메모리(`~/.claude-work/.../memory/`)가 따라오지 않습니다.
 > 이 파일이 그 대신입니다. 새 세션에서 **"HANDOFF.md 읽고 이어서 진행해줘"**라고 말하면 됩니다.
@@ -19,13 +19,13 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 브랜치 | `ash-e/stage-a-capture-priority` (main도 같은 커밋으로 fast-forward, 2026-11-18). `_workspace/사용자_할일.md`는 커밋 안 함 |
+| 브랜치 | `ash-e/stage-a-capture-priority`, 최신 커밋 `9c7f8fa` (main도 같은 커밋으로 fast-forward, 2026-11-18). `_workspace/사용자_할일.md`는 커밋 안 함 |
 | **기본(최종) 담배 모델** | **`models/cig_roi_v6.onnx`** (사용자 결정 2026-11-18 "최종결과 v6"). config.py와 prototype 도구 기본값 모두 v6 |
 | **P03 최종 시험** | **2026-11-18 12:08 v6로 1회 실행 → 불합격** (6개 중 2개 통과). `acceptance/holdout_runs.log` run #1, 리포트 `_workspace/eval_out/clips_holdout_p03_v6/run_001/`. P03 영상은 `data/eval/holdout/clips/P03/S1/`에 복사했고 영상 매니페스트 `acceptance/holdout_clips_manifest.json`이 생김 |
-| 보고서 | README 5절(모델 개발 보고서 v1~v6), 참고 절(val mAP50 설명). 그래프 `docs/figures/` (`prototype/report_figures.py`로 재생성) |
+| 보고서 | README 5절(모델 개발 보고서 v1~v6), **6절(RPi5·ROS2 설치·실행·검증 절차)**, 참고 절(val mAP50 설명). 그래프 `docs/figures/` (`prototype/report_figures.py`로 재생성) |
 | 예전 README | `docs/README_v1~v3_촬영안내_*.md` (v3 = 11-13 S3 촬영 안내, GitHub main에 있던 것) |
 | **합격 게이트** | **2026-11-18 사용자 선언: "v6를 현재 수준으로 합격, 이식 시작"** (P03 불합격 수치를 알고 받아들인 예비 합격. 일반화 검증은 단계 B 실기 재평가로 넘김, 설계서 11장 게이트 해석) |
-| ROS2 이식(단계 B) | **코드 작성 + Windows 검증 완료(4B), RPi5 실행 전.** 새 패키지 `src/ash_e_msgs`, `src/ash_e_perception`, `src/ash_e_priority`, core 신규 `depth_align.py`(+ package.xml, resource). 기존 core .py 무수정(해시 확인). pytest 222 passed. QA 결함 D1~D6 수정 완료. 보고서 `_workspace/03b_qa_report.md`, 노트 `_workspace/02b_perception_notes.md`·`02b_priority_notes.md`. 아직 커밋 안 함 | 사용자가 이식 준비를 요청했으나 합격선 미달이라 확인을 받았고, 사용자는 "P03 최종 시험 먼저"를 골랐다. 결과가 불합격이므로 다음 방향은 사용자 결정 대기(4절) |
+| ROS2 이식(단계 B) | **코드 작성 + Windows 검증 완료(4B), RPi5 실행 전.** 새 패키지 `src/ash_e_msgs`(msg 5종), `src/ash_e_perception`(노드·도구·launch·config), `src/ash_e_priority`(노드·fake 입력·`ash_e_all.launch.py`), core 신규 `depth_align.py`(+ package.xml, resource). 기존 core .py 무수정(해시 확인). pytest 222 passed. QA 결함 D1~D6 수정 완료. 보고서 `_workspace/03b_qa_report.md`, 노트 `_workspace/02b_perception_notes.md`·`02b_priority_notes.md`. 커밋 `cbb7884`(코드), `9c7f8fa`(README 6절) |
 
 ### v6 핵심 수치 (자세한 표는 README 5절)
 
@@ -43,6 +43,13 @@
 
 ## 3. 최근에 한 일
 
+### 2026-11-18 (저녁) — 단계 B 시작
+1. 사용자 선언 "v6를 현재 수준으로 합격, 이식 시작" → 오케스트레이터 3B: perception-dev(B1~B5), priority-dev(B6~B9) 병렬 구현.
+2. 4B QA(ash-e-qa): msg↔core 1:1, 금지 import, core 무수정, 설정 키, launch 정적 점검 통과. 동등성 도구 `prototype/log_replay_jsonl.py`·`compare_jsonl.py` 추가. 결함 D1(bag 재생 시 첫 프레임 버림, 중간)~D6을 수정 1회로 해결.
+3. 설계와 다른 점: 컬러·뎁스 동기화는 `FrameMatcher`(뎁스 끊겨도 컬러 통과), DepthAligner 구멍 메우기 반경 `ceil(decimate×scale×0.75)`.
+4. README 6절을 RPi5 설치 절차로 재작성(준비물, ROS2 설치, venv, 모델 복사·해시, colcon, fake 시험, Astra Pro 드라이버·보정, 실행, 동등성, 성능 점검). 1·2·3절 상태도 갱신.
+5. 커밋·푸시: `cbb7884`(이식 코드), `9c7f8fa`(README) → 브랜치 + main fast-forward.
+
 ### 2026-11-18 (오후)
 1. v6 학습: 03:03 첫 시도는 Claude 세션 종료와 함께 끊김(1 epoch도 못 끝냄). 08:41 WMI(`Win32_Process.Create`)로 분리 실행해 처음부터 다시 → 30/30 완료(8,940 s), best epoch 26. `models/cig_roi_v6.onnx`.
 2. P02 평가: 영상(v1·v3exp·v6 추가), 사진(v4·v5·v6 추가), 기준값 스윕(6개 버전), 박스 위치 확인(`_workspace/eval_out/box_v6`). v6가 영상 정밀도·오확정 최고, mouth_002(3 m) 회복, mouth_003(4.5 m)은 못 잡음.
@@ -53,7 +60,9 @@
 
 ## 4. 다음 할 일 (단계 B, RPi5에서)
 
-1. RPi5 준비: Ubuntu 24.04 + ROS2 Jazzy, 이 저장소 clone, `models/cig_roi_v6.onnx`·`models/pose.onnx`를 이 PC에서 scp로 복사(해시 확인). 절차는 `_workspace/02b_perception_notes.md`.
+사용자가 따라 할 절차는 **README 6절**(6-2~6-11)에 있다. 아래는 순서 요약.
+
+1. RPi5 준비: Ubuntu 24.04 + ROS2 Jazzy, 이 저장소 clone, `models/cig_roi_v6.onnx`·`models/pose.onnx`를 이 PC에서 scp로 복사(해시 확인). core는 pip로 깔지 않고 colcon이 빌드한다(README 6-4).
 2. B0 카메라 드라이버: Astra Pro 실물 확인(`lsusb`, `v4l2-ctl --list-formats-ext`) → D1 `ros2_astra_camera` 소스 빌드(최대 2일) → 실패 시 D3 → D4(컬러 전용). 실제 토픽을 `camera_astra_pro.yaml`에 반영(지금은 추정값), 외부 보정(`calib_astra_extrinsics`).
 3. `colcon build` → fake 입력으로 우선순위 단독 시험 → 전체 기동 `ros2 launch ash_e_priority ash_e_all.launch.py ...`. 명령 목록은 `_workspace/03b_qa_report.md` 7절.
 4. 동등성 검사(10.2): Windows `prototype/log_replay_jsonl.py`로 proto.jsonl → RPi5 `video_to_bag` + bag 재생(`equivalence_mode:=true`, `tick_rate_hz:=0.1`) + `dump_jsonl` → `prototype/compare_jsonl.py`. 다수 인원 클립(S5·S8·S10)도 포함.
@@ -71,6 +80,8 @@
 ## 6. 확인이 필요한 것
 
 - `_workspace/사용자_할일.md`: 사용자 수정분, 커밋 안 함(5절).
+- RPi5 명령은 Windows에서 실행해 볼 수 없어 전부 미검증. 사용자가 RPi5 오류를 알려 주면 README 6절과 02b 노트를 함께 고친다.
+- Astra Pro 토픽 이름(`camera_astra_pro.yaml`)은 추정값. B0 결과로 갱신.
 - (해결) 작업 폴더 README가 옛 영상 안내로 바뀌어 있던 문제: 2026-11-18 README를 보고서로 재구성하며 정리. 이전 작업 폴더본은 v2와 거의 같았다.
 
 ## 7. 주요 파일 위치
@@ -80,7 +91,10 @@
 | 설계서 | `_workspace/01_planner_spec.md` |
 | 인식 구현 노트 (명령·결과 이력) | `_workspace/02a_perception_notes.md` |
 | 우선순위 구현 노트 | `_workspace/02a_priority_notes.md` |
-| QA 보고서 | `_workspace/03a_qa_report.md` |
+| QA 보고서 | `_workspace/03a_qa_report.md`(단계 A), `_workspace/03b_qa_report.md`(단계 B, 7절 RPi5 명령) |
+| 단계 B 노트 | `_workspace/02b_perception_notes.md`, `_workspace/02b_priority_notes.md` |
+| ROS2 패키지 | `src/ash_e_msgs/`, `src/ash_e_perception/`, `src/ash_e_priority/` |
+| RPi5 설치 절차 | README 6절 |
 | 공통 코어 | `src/ash_e_core/` |
 | 웹캠 프로토타입·평가 도구 | `prototype/` |
 | 학습 도구 | `training/` |
