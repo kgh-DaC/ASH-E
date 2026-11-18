@@ -1,0 +1,56 @@
+# ash_e_perception parameters. `/**:` so the file also works when the node is started with another name/namespace
+# (ash_e_all.launch.py starts it without a name). Core keys == ash_e_core.config.PerceptionConfig (same names as
+# prototype/config/perception.yaml, QA compares the key sets). Camera-specific values live in camera_astra_pro.yaml.
+/**:
+  ros__parameters:
+    # ---- core keys (spec 8) ----
+    pose_model_path: "models/pose.onnx"
+    cig_model_path: "models/cig_roi_v6.onnx"
+    backend: "onnxruntime"
+    num_threads: 4
+    pose_input: 320
+    roi_input: 192
+    person_conf_thresh: 0.4
+    min_person_h_px: 60
+    max_persons: 8
+    max_roi_persons: 4
+    roi_every_n: 1
+    kp_conf_thresh: 0.3
+    mouth_roi_scale: 1.6
+    hand_roi_scale: 1.4
+    min_roi_px: 24
+    cig_conf_thresh: 0.35
+    smoking_radius: 0.7
+    holding_radius: 0.9
+    track_iou_thresh: 0.3
+    track_max_age_s: 1.0
+    stationary_speed_thresh: 0.25
+    stab_window_s: 1.5
+    stab_min_obs: 4
+    confirm_ratio: 0.6
+    release_ratio: 0.25
+    release_hold_s: 1.0
+    smoking_min_obs: 2
+    smoking_latch_s: 20.0
+    person_height_m: 1.65
+    shoulder_width_m: 0.4
+    head_width_m: 0.15
+    edge_margin_px: 8
+    hfov_deg: 70.0
+    depth_min_m: 0.6
+    depth_max_m: 6.0
+    depth_min_valid_px: 30
+    depth_min_valid_ratio: 0.15
+    depth_roi_shrink: 0.1
+    depth_align_decimate: 2
+    process_rate_hz: 8.0
+    frame_id: "webcam_optical"
+    # ---- wrapper-only keys (spec 4.2) ----
+    detections_topic: "/ash_e/detections"
+    debug_image_topic: "/ash_e/perception/debug_image"
+    equivalence_mode: false
+    publish_debug_image: false
+    publish_extrinsics_tf: false
+    model_dir: ""
+    log_period_s: 5.0
+    depth_log_period_s: 10.0

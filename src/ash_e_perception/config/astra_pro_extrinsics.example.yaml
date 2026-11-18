@@ -1,0 +1,13 @@
+# EXAMPLE / PLACEHOLDER ONLY (identity, made-up intrinsics). Do NOT use for real distance measurement.
+# The real file is astra_pro_extrinsics.yaml, produced by tools/calib_astra_extrinsics (spec 5.8, rms_px <= 0.5 expected).
+# Without that file the node warns and runs with PROXY distance.
+depth_K: [570.0, 0.0, 320.0, 0.0, 570.0, 240.0, 0.0, 0.0, 1.0]
+depth_size: [640, 480]
+color_K: [900.0, 0.0, 640.0, 0.0, 900.0, 360.0, 0.0, 0.0, 1.0]
+color_size: [1280, 720]
+R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+t: [0.025, 0.0, 0.0]
+rms_px: -1.0
+date: "example"
+note: "placeholder, not measured"
+depth_pixel_offset_uv: [0.0, 0.0]

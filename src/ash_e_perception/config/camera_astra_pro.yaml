@@ -1,0 +1,20 @@
+# Camera-side parameters for the Orbbec Astra Pro (spec 6.3). ALL VALUES ARE ESTIMATES until B0 is done on the RPi5:
+# the topic names below are the ros2_astra_camera / planned ash_e_camera defaults (D1/D3) and have NOT been verified
+# against a real driver. After B0 run `ros2 topic list`, `ros2 topic info -v <topic>` and fix this file.
+# Use together with perception.yaml:  --params-file perception.yaml --params-file camera_astra_pro.yaml
+/**:
+  ros__parameters:
+    color_topic: "/camera/color/image_raw"          # [estimate] usb_cam / v4l2_camera publish /image_raw instead
+    color_info_topic: "/camera/color/camera_info"   # [estimate]
+    depth_topic: "/camera/depth/image_raw"          # [estimate] 16UC1 mm
+    depth_info_topic: "/camera/depth/camera_info"   # [estimate]
+    use_depth: true
+    depth_alignment: "software"                     # software | hardware | none (D4 colour-only run: none or use_depth false)
+    extrinsics_file: "config/astra_pro_extrinsics.yaml"   # NOT in git: create with calib_astra_extrinsics (spec 5.8)
+    color_frame_id_override: ""                     # set to camera_color_optical_frame if the UVC driver gives a junk frame_id
+    depth_frame_id: ""
+    sync_slop_s: 0.05                               # [field check] 0.03-0.08
+    sync_wait_s: 0.12
+    info_wait_s: 5.0
+    input_qos: "sensor_data"                        # sensor_data | reliable
+    # colour stream the camera driver should be asked for: 1280x720 MJPEG if possible (spec 5.5); depth 640x480 @15-30 fps.

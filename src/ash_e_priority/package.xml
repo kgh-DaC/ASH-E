@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ash_e_priority</name>
+  <version>0.1.0</version>
+  <description>ASH-E target priority node (thin ROS2 wrapper around ash_e_core.priority)</description>
+  <maintainer email="ash-e@example.com">ASH-E</maintainer>
+  <license>Proprietary</license>
+
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>ash_e_msgs</depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>ash_e_core</exec_depend>  <!-- colcon builds core; do not also pip install -e it (see 02b notes) -->
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,6 +1,6 @@
 # ASH-E 인수인계 문서
 
-마지막 갱신: 2026-11-18 12시 30분 (v6 최종, P03 최종 시험 불합격, README 보고서)
+마지막 갱신: 2026-11-18 (v6 예비 합격 선언 → 단계 B ROS2 이식 코드 작성·Windows 검증 완료, RPi5 실행 대기)
 
 > 다른 Claude 계정으로 로그인하면 이전 대화와 개인 메모리(`~/.claude-work/.../memory/`)가 따라오지 않습니다.
 > 이 파일이 그 대신입니다. 새 세션에서 **"HANDOFF.md 읽고 이어서 진행해줘"**라고 말하면 됩니다.
@@ -11,7 +11,7 @@
 ## 1. 프로젝트 한 줄 요약
 
 로봇(RPi5 + Ubuntu 24 + ROS2 Jazzy + 뎁스카메라)이 흡연자·담배 소지자를 알아보고, 여러 명이면 우선순위로 접근 대상을 정한다.
-지금은 **단계 A(Windows 노트북 웹캠으로 인식 정확도 검증)**이다. 사용자가 "프로토타입 합격"이라고 말하기 전에는 단계 B(ROS2 이식)를 시작하지 않는다.
+단계 A(Windows 웹캠 정확도 검증)는 2026-11-18 사용자 예비 합격 선언으로 끝났고, 지금은 **단계 B(ROS2 이식)**: 코드·Windows 검증 완료, RPi5 실행 대기.
 
 작업 흐름 규칙은 `CLAUDE.md`와 `.claude/skills/ash-e-orchestrator/SKILL.md`에 있다.
 
@@ -24,7 +24,8 @@
 | **P03 최종 시험** | **2026-11-18 12:08 v6로 1회 실행 → 불합격** (6개 중 2개 통과). `acceptance/holdout_runs.log` run #1, 리포트 `_workspace/eval_out/clips_holdout_p03_v6/run_001/`. P03 영상은 `data/eval/holdout/clips/P03/S1/`에 복사했고 영상 매니페스트 `acceptance/holdout_clips_manifest.json`이 생김 |
 | 보고서 | README 5절(모델 개발 보고서 v1~v6), 참고 절(val mAP50 설명). 그래프 `docs/figures/` (`prototype/report_figures.py`로 재생성) |
 | 예전 README | `docs/README_v1~v3_촬영안내_*.md` (v3 = 11-13 S3 촬영 안내, GitHub main에 있던 것) |
-| ROS2 이식(단계 B) | **시작 안 함.** 사용자가 이식 준비를 요청했으나 합격선 미달이라 확인을 받았고, 사용자는 "P03 최종 시험 먼저"를 골랐다. 결과가 불합격이므로 다음 방향은 사용자 결정 대기(4절) |
+| **합격 게이트** | **2026-11-18 사용자 선언: "v6를 현재 수준으로 합격, 이식 시작"** (P03 불합격 수치를 알고 받아들인 예비 합격. 일반화 검증은 단계 B 실기 재평가로 넘김, 설계서 11장 게이트 해석) |
+| ROS2 이식(단계 B) | **코드 작성 + Windows 검증 완료(4B), RPi5 실행 전.** 새 패키지 `src/ash_e_msgs`, `src/ash_e_perception`, `src/ash_e_priority`, core 신규 `depth_align.py`(+ package.xml, resource). 기존 core .py 무수정(해시 확인). pytest 222 passed. QA 결함 D1~D6 수정 완료. 보고서 `_workspace/03b_qa_report.md`, 노트 `_workspace/02b_perception_notes.md`·`02b_priority_notes.md`. 아직 커밋 안 함 | 사용자가 이식 준비를 요청했으나 합격선 미달이라 확인을 받았고, 사용자는 "P03 최종 시험 먼저"를 골랐다. 결과가 불합격이므로 다음 방향은 사용자 결정 대기(4절) |
 
 ### v6 핵심 수치 (자세한 표는 README 5절)
 
@@ -50,15 +51,14 @@
 5. README를 보고서 형태로 재구성(GitHub main의 11-13 README는 `docs/README_v3_촬영안내_2026-11-13.md`로 보관). Claude Docs 문서 "YOLO 학습 지표 쉽게 이해하기"를 참고 절로 옮김.
 6. 커밋·푸시(브랜치 + main fast-forward).
 
-## 4. 다음 할 일 (사용자 결정 필요)
+## 4. 다음 할 일 (단계 B, RPi5에서)
 
-1. **방향 결정:** (가) 정확도 개선 후 이식 — 학습 참가자 추가(P04 이상; 펜·막대를 입에 대기, 휴대폰을 얼굴 앞에 들기 장면), 원거리 ROI 확대, v7 실험(v6 데이터 + v1 가중치 + AdamW). 이 경우 P03는 이미 한 번 썼으므로 **새 hold-out 참가자**가 필요. (나) 사용자가 v6를 "현재 수준으로 프로토타입 합격"이라고 명시하면 단계 B(ROS2 이식) 시작 — `ash-e-orchestrator` 스킬 3B단계.
-2. v7 실험을 하면: `.venv\Scripts\python training\train_cig_roi.py --data data\roi_ds_v6.yaml --weights training\runs\cig_roi_v2\weights\best.pt --epochs 30 --patience 10 --name cig_roi_v7` (`optimizer=auto`라 AdamW를 강제하려면 train_cig_roi.py에 옵션 추가 필요). 평가는 P02로만.
-3. 긴 학습은 WMI로 분리 실행해야 Claude 세션이 끝나도 계속 돈다 (PowerShell):
-   ```
-   $cmd = "cmd.exe /c cd /d <repo> && .venv\Scripts\python training\train_cig_roi.py ... > training\runs\<name>_train.log 2>&1"
-   Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$cmd; CurrentDirectory=(Get-Location).Path}
-   ```
+1. RPi5 준비: Ubuntu 24.04 + ROS2 Jazzy, 이 저장소 clone, `models/cig_roi_v6.onnx`·`models/pose.onnx`를 이 PC에서 scp로 복사(해시 확인). 절차는 `_workspace/02b_perception_notes.md`.
+2. B0 카메라 드라이버: Astra Pro 실물 확인(`lsusb`, `v4l2-ctl --list-formats-ext`) → D1 `ros2_astra_camera` 소스 빌드(최대 2일) → 실패 시 D3 → D4(컬러 전용). 실제 토픽을 `camera_astra_pro.yaml`에 반영(지금은 추정값), 외부 보정(`calib_astra_extrinsics`).
+3. `colcon build` → fake 입력으로 우선순위 단독 시험 → 전체 기동 `ros2 launch ash_e_priority ash_e_all.launch.py ...`. 명령 목록은 `_workspace/03b_qa_report.md` 7절.
+4. 동등성 검사(10.2): Windows `prototype/log_replay_jsonl.py`로 proto.jsonl → RPi5 `video_to_bag` + bag 재생(`equivalence_mode:=true`, `tick_rate_hz:=0.1`) + `dump_jsonl` → `prototype/compare_jsonl.py`. 다수 인원 클립(S5·S8·S10)도 포함.
+5. 확인할 위험: `DepthAligner.align` Windows 18 ms → RPi5 40~60 ms 예상(예산 5~15 ms 초과 가능), 정적 TF 기본값(높이 1.1 m, 전방 0.1 m) 현장 확인, launch 두 파일의 OVERRIDES 목록은 함께 고칠 것.
+6. 설계서 갱신(planner 몫): 10.2의 `run_webcam.py --log` → `log_replay_jsonl.py`, 동기화는 `FrameMatcher`(뎁스 끊김 시 컬러만 통과).
 
 ## 5. 지켜야 할 규칙
 
