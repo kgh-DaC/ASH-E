@@ -2,7 +2,7 @@
 
 졸업작품 프로젝트입니다. 로봇이 카메라로 **담배를 피우거나 담배를 들고 있는 사람**을 알아보고, 여러 명이면 우선순위를 정해 가장 높은 사람에게 먼저 다가가는 프로그램을 만듭니다. (라즈베리파이5 + Ubuntu 24 + ROS2 Jazzy + 뎁스카메라가 최종 목표입니다.)
 
-지금은 **1단계: 노트북 웹캠으로 "담배 든 사람을 구분할 수 있는가"를 시험**하는 단계입니다. 2026-11-18에 학습한 **v6를 최종 모델로 정하고 P03 최종 시험(hold-out)을 실행했고, 결과는 불합격**입니다(아래 1절). 이 문서는 지금까지의 데이터, 학습, 품질 평가 결과를 논문·보고서에 옮겨 쓸 수 있도록 정리한 보고서입니다.
+**1단계(노트북 웹캠으로 "담배 든 사람을 구분할 수 있는가" 시험)**를 마쳤습니다. 2026-11-18에 학습한 **v6를 최종 모델로 정하고 P03 최종 시험(hold-out)을 실행했고, 결과는 불합격**입니다(아래 1절). 담당자가 v6를 현재 수준으로 합격 처리해 **2단계(ROS2 이식)를 시작**했고, 라즈베리파이 설치 절차는 6절에 있습니다. 이 문서는 지금까지의 데이터, 학습, 품질 평가 결과를 논문·보고서에 옮겨 쓸 수 있도록 정리한 보고서입니다.
 
 > 이 저장소에는 사진, 영상, 학습된 모델 파일이 들어 있지 않습니다. 촬영한 파일은 촬영한 PC에만 저장되고 인터넷에 올라가지 않습니다. 그래프는 모두 `docs/figures/`에 있고 `prototype/report_figures.py`로 다시 만들 수 있습니다.
 >
@@ -20,7 +20,7 @@
 | P02 dev 영상 13개 | 정밀도 0.804, 유사물 오확정 1건 (모든 버전 중 가장 좋음). 합격선 6개 중 1개 통과 |
 | **P03 최종 시험 영상 12개** | **불합격** — 6개 중 2개 통과 (흡연/소지 구분 0.993, 확정 시간 1.6 s). 정밀도 0.471, 재현율(≤3 m) 0.420, 재현율(3~5 m) 0.166, 유사물 오확정 10건(10분당 24.9) |
 | 처리 시간 (Windows PC) | 사람 3명 기준 프레임당 중앙값 24.8 ms (포즈 6.3 + 담배 18.3 ms) |
-| 로봇(ROS2) 이식 | ⏳ **시작하지 않음.** 프로젝트 규칙상 1단계 합격 후 시작 (6절) |
+| 로봇(ROS2) 이식 | 🔧 **2026-11-18 시작** (담당자가 v6를 현재 수준으로 합격 선언). 코드·Windows 검증 완료, 라즈베리파이 실행 전. 설치 절차는 6절 |
 
 ![v6 최종 시험](docs/figures/final_v6_p02_vs_p03.png)
 
@@ -37,7 +37,7 @@
 | P02 영상으로 비교 | ✅ v6가 정밀도·오확정 기준 최고, 합격선은 미달 |
 | **P03 최종 시험** | ✅ **2026-11-18 v6로 1회 실행 → 불합격** (`acceptance/holdout_runs.log` run #1) |
 | 여러 명일 때 우선순위 | ✅ 프로그램과 모의실험 완료 |
-| 로봇(ROS2) 이식 | ⏳ 1단계 합격 후 |
+| 로봇(ROS2) 이식 | 🔧 코드 작성·Windows 검증 완료(테스트 222개), 라즈베리파이 실행 대기 (6절) |
 
 ---
 
@@ -45,10 +45,14 @@
 
 ```
 ASH-E/
-├─ src/ash_e_core/        ROS 없이 동작하는 인식 핵심 코드 (사람 추적, 담배 판정, 안정화, 거리 추정, 우선순위)
+├─ src/ash_e_core/        ROS 없이 동작하는 인식 핵심 코드 (사람 추적, 담배 판정, 안정화, 거리 추정, 뎁스 정렬, 우선순위)
+├─ src/ash_e_msgs/        ROS2 메시지 정의 5종
+├─ src/ash_e_perception/  ROS2 인식 노드, launch·config, 도구(video_to_bag, dump_jsonl, 보정, depth_check)
+├─ src/ash_e_priority/    ROS2 우선순위 노드, 가짜 입력 발행기, 전체 기동 launch
 ├─ prototype/             웹캠 프로토타입: 촬영(capture.py), 실시간 실행·녹화(run_webcam.py),
 │                         평가(eval_images.py, eval_clips.py), 보고서 그래프(report_figures.py, report_val_common.py),
-│                         우선순위 모의실험(sim_priority.py), 정답 검수 도구(review_labels.py)
+│                         우선순위 모의실험(sim_priority.py), 정답 검수 도구(review_labels.py),
+│                         이식 동등성 비교(log_replay_jsonl.py, compare_jsonl.py)
 ├─ training/              담배 검출기 데이터셋 만들기·학습·ONNX 내보내기
 ├─ acceptance/            합격 기준과 해시 잠금, hold-out 실행 기록
 ├─ docs/                  예전 안내서, 보고서 그래프(figures/)
@@ -58,10 +62,10 @@ ASH-E/
 └─ CLAUDE.md
 ```
 
-- 설계서 `_workspace/01_planner_spec.md` · 인식 노트 `_workspace/02a_perception_notes.md` · 우선순위 노트 `_workspace/02a_priority_notes.md` · 검증 보고서 `_workspace/03a_qa_report.md`
-- 전체 테스트: `python -m pytest -q prototype src/ash_e_core/test` (2026-11-18: 128 passed)
+- 설계서 `_workspace/01_planner_spec.md` · 인식 노트 `_workspace/02a_perception_notes.md`(1단계), `02b_perception_notes.md`(2단계) · 우선순위 노트 `02a_priority_notes.md`, `02b_priority_notes.md` · 검증 보고서 `03a_qa_report.md`, `03b_qa_report.md`
+- 전체 테스트: `python -m pytest -q` (2026-11-18 이식 후: 222 passed)
 - 실시간 실행: `python prototype\run_webcam.py` (기본 담배 모델 v6)
-- 개발 순서: **1단계(지금)** 윈도우 웹캠으로 정확도 검증 → **2단계** 합격 후 ROS2 Jazzy + 라즈베리파이5 + 뎁스카메라로 이식. 로봇 주행과 넛지 UI는 범위 밖.
+- 개발 순서: **1단계(완료)** 윈도우 웹캠으로 정확도 검증 → **2단계(진행 중)** ROS2 Jazzy + 라즈베리파이5 + 뎁스카메라로 이식. 로봇 주행과 넛지 UI는 범위 밖.
 
 ---
 
@@ -411,16 +415,199 @@ PR 곡선을 보면 재현율 0.7까지는 정밀도 0.8 이상을 유지하다�
 
 ---
 
-## 6. 라즈베리파이(ROS2) 이식
+## 6. 라즈베리파이(ROS2) 이식과 설치 절차
 
-**아직 시작하지 않았습니다.** 개발 규칙상 이식(2단계)은 1단계에서 담당자가 "프로토타입 합격"을 선언한 뒤 시작합니다. 정확도가 부족한 상태로 ROS 배선을 얹으면, 나중에 문제가 생겼을 때 원인이 인식인지 이식인지 가려낼 수 없기 때문입니다. v6는 P03 최종 시험에서 불합격했으므로 다음 중 하나를 정해야 합니다.
+### 6-1. 현재 상태
 
-| 선택 | 내용 |
+2026-11-18 담당자가 v6를 **"현재 수준으로 합격"**으로 선언했습니다(P03 불합격 수치를 알고 받아들인 예비 합격). 그래서 2단계(ROS2 이식)를 시작했습니다. 인식 성능이 실제 환경에서도 통하는지는 라즈베리파이 실기 시험에서 다시 확인합니다.
+
+| 항목 | 상태 |
 | --- | --- |
-| 정확도 개선 후 이식 | 5-9의 개선 방향(참가자 추가 등)으로 모델을 고치고, 새 hold-out 참가자로 다시 판정한 뒤 이식 |
-| 현재 성능으로 이식 시작 | 담당자가 v6를 "현재 수준으로 합격"이라고 명시하면, v6를 기준으로 ROS2 Jazzy 노드(인식·우선순위) 이식을 시작. 이식 후에도 같은 영상으로 Windows 결과와 같은지 검증 |
+| ROS2 패키지 코드 | ✅ `ash_e_msgs`(메시지 5종), `ash_e_perception`(인식 노드·도구), `ash_e_priority`(우선순위 노드·가짜 입력·전체 기동) |
+| 핵심 코드 `ash_e_core` | ✅ 1단계에서 검증한 파일은 수정하지 않음(해시 확인). 뎁스 정렬 `depth_align.py`만 새로 추가 |
+| Windows 검증 | ✅ 테스트 222개 통과, 메시지↔핵심 타입 1:1 대조, 설정값 일치 (`_workspace/03b_qa_report.md`) |
+| 라즈베리파이 실행 | ⏳ **아직 안 함.** 빌드·노드 실행·카메라 드라이버·결과 동등성 검사는 아래 절차로 라즈베리파이에서 해야 함 |
 
-이식할 때 쓸 파일: `models/pose.onnx`, `models/cig_roi_v6.onnx`(이 저장소에는 없음, 학습 PC에서 복사), `src/ash_e_core/`(ROS 없이 동작하는 핵심 코드, 그대로 재사용), 설정 `src/ash_e_core/ash_e_core/config.py`.
+구조는 1단계와 같은 핵심 코드를 ROS 노드가 얇게 감싸는 방식입니다.
+
+```
+Astra Pro 컬러(UVC) ─┐
+Astra Pro 뎁스 ──────┴─► ash_e_perception (perception_node)
+                          └─ /ash_e/detections ─► ash_e_priority (priority_node)
+                                                   ├─ /ash_e/target, /ash_e/target_point
+                                                   └─ /ash_e/priority/markers (RViz)
+```
+
+> 아래 명령은 Windows에서 실행해 볼 수 없어 **라즈베리파이에서 아직 검증되지 않았습니다.** 패키지 이름·옵션이 다르면 오류 메시지를 따라 고치고, 고친 내용을 이 절에 반영해 주세요.
+
+### 6-2. 준비물
+
+| 항목 | 내용 |
+| --- | --- |
+| 보드 | Raspberry Pi 5 (8 GB 권장), 방열판·쿨러 (장시간 추론 시 발열) |
+| OS | Ubuntu 24.04 LTS (64-bit, arm64) |
+| ROS | ROS2 Jazzy (ros-base) |
+| 카메라 | Orbbec Astra Pro (뎁스 640×480 + 별도 UVC 컬러). 없으면 일반 USB 웹캠으로 컬러 전용 시험 가능 |
+| 모델 파일 | `models/pose.onnx`, `models/cig_roi_v6.onnx` — **저장소에 없음, 학습 PC에서 복사** |
+
+### 6-3. ROS2 Jazzy와 의존 패키지 설치
+
+ROS2 Jazzy 공식 설치 안내(apt 저장소 등록)를 따른 뒤:
+
+```bash
+sudo apt update
+sudo apt install ros-jazzy-ros-base ros-jazzy-cv-bridge ros-jazzy-tf2-ros \
+     ros-jazzy-rosbag2 ros-jazzy-rosbag2-storage-default-plugins \
+     ros-jazzy-usb-cam ros-jazzy-v4l2-camera \
+     python3-colcon-common-extensions python3-venv python3-opencv python3-yaml \
+     v4l-utils git
+```
+
+### 6-4. 저장소 받기와 파이썬 환경
+
+```bash
+mkdir -p ~/ash_e && cd ~/ash_e
+git clone https://github.com/kgh-DaC/ASH-E.git ws
+source /opt/ros/jazzy/setup.bash
+python3 -m venv --system-site-packages ~/ash_e/venv     # apt로 깐 cv_bridge·opencv를 그대로 씀
+source ~/ash_e/venv/bin/activate
+pip install onnxruntime "numpy<2"                       # numpy 2.x가 깔리면 cv_bridge가 깨짐
+```
+
+- `ash_e_core`는 colcon이 함께 빌드하므로 `pip install -e src/ash_e_core`는 하지 않습니다. 이미 했다면 `pip uninstall ash_e_core`.
+- ultralytics(학습용)는 라즈베리파이에 깔지 않습니다. 추론은 onnxruntime만 씁니다.
+
+### 6-5. 모델 파일 복사 (Windows PC → 라즈베리파이)
+
+Windows PowerShell, 저장소 폴더에서:
+
+```powershell
+Get-FileHash models\pose.onnx, models\cig_roi_v6.onnx -Algorithm SHA256     # 해시 기록
+ssh <사용자>@<라즈베리파이 주소> "mkdir -p ~/ash_e/models"
+scp models\pose.onnx models\cig_roi_v6.onnx <사용자>@<라즈베리파이 주소>:~/ash_e/models/
+```
+
+라즈베리파이에서:
+
+```bash
+sha256sum ~/ash_e/models/*.onnx                         # 위 해시와 같은지 확인
+echo 'export ASH_E_MODEL_DIR=$HOME/ash_e/models' >> ~/.bashrc
+```
+
+모델이 없어도 노드는 켜지지만, 경고를 내고 빈 결과만 보냅니다.
+
+### 6-6. 빌드
+
+```bash
+cd ~/ash_e/ws
+source /opt/ros/jazzy/setup.bash && source ~/ash_e/venv/bin/activate      # venv를 켠 채로 빌드
+colcon build --symlink-install \
+     --packages-select ash_e_msgs ash_e_core ash_e_perception ash_e_priority 2>&1 | tee build.log
+source install/setup.bash
+ros2 interface show ash_e_msgs/msg/TargetStatus          # 메시지가 보이면 성공
+python3 -c "import ash_e_core.pipeline, ash_e_core.priority; print('core ok')"
+```
+
+새 터미널을 열 때마다:
+
+```bash
+source /opt/ros/jazzy/setup.bash; source ~/ash_e/venv/bin/activate; source ~/ash_e/ws/install/setup.bash
+```
+
+### 6-7. 카메라 없이 우선순위만 시험 (가짜 입력)
+
+```bash
+ros2 launch ash_e_priority priority.launch.py                                   # 터미널 1
+ros2 run ash_e_priority fake_detections_pub --ros-args -p list:=true            # 터미널 2: 시나리오 목록
+ros2 run ash_e_priority fake_detections_pub --ros-args -p scenario:=s5_mixed    # 여러 명 → 점수 최고 대상 선택
+ros2 run ash_e_priority fake_detections_pub --ros-args -p scenario:=target_departs_oor            # 대상 이탈 → 다음 대상
+ros2 run ash_e_priority fake_detections_pub --ros-args -p scenario:=s5_mixed -p silence_from_s:=10.0 -p silence_for_s:=5.0   # 입력 끊김
+ros2 topic echo /ash_e/target --field last_event     # ACQUIRED=1 SWITCHED_BETTER=2 LOST_TIMEOUT=3 OUT_OF_RANGE=4 INPUT_TIMEOUT=6
+```
+
+결과는 1단계 모의실험 표(`_workspace/02a_priority_notes.md`)와 같아야 합니다.
+
+### 6-8. 카메라 드라이버 (Astra Pro)
+
+1. **카메라 확인**
+   ```bash
+   lsusb | grep -i -E "2bc5|orbbec"                     # Astra Pro인지 Pro Plus인지
+   v4l2-ctl --list-devices
+   v4l2-ctl -d /dev/videoN --list-formats-ext           # 컬러가 1280×720을 내는지
+   ```
+2. **1순위: `ros2_astra_camera` 소스 빌드** (Jazzy·arm64 공식 지원 표기가 없어 컴파일 수정이 필요할 수 있음, 최대 2일)
+   ```bash
+   sudo apt install libgflags-dev libgoogle-glog-dev libusb-1.0-0-dev libeigen3-dev nlohmann-json3-dev \
+        ros-jazzy-image-transport ros-jazzy-image-publisher ros-jazzy-camera-info-manager \
+        ros-jazzy-backward-ros ros-jazzy-image-geometry libuvc-dev
+   cd ~/ash_e/ws/src && git clone https://github.com/orbbec/ros2_astra_camera.git
+   cd ros2_astra_camera/astra_camera/scripts && sudo bash install.sh
+   sudo udevadm control --reload && sudo udevadm trigger
+   cd ~/ash_e/ws && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-select astra_camera_msgs astra_camera
+   ls src/ros2_astra_camera/astra_camera/launch          # astra_pro 계열 런치 이름 확인
+   ```
+3. **실패하면:** 뎁스는 Orbbec OpenNI2 SDK(arm64)로 읽는 작은 노드를 새로 만들고, 컬러는 `usb_cam`으로 받습니다(최대 3일).
+4. **그래도 안 되면 컬러 전용:** `use_depth:=false`. 거리는 사람 크기로 추정합니다.
+5. 실제 토픽 이름을 `ros2 topic list`, `ros2 topic info -v <토픽>`으로 확인해 `src/ash_e_perception/config/camera_astra_pro.yaml`에 반영합니다. **지금 들어 있는 토픽 이름은 추정값입니다.**
+6. **컬러↔뎁스 위치 보정** (체커보드 9×6, 25 mm, 20쌍 이상, 0.6~2 m):
+   ```bash
+   ros2 run ash_e_perception calib_astra_extrinsics capture --out ~/ash_e/calib --color-topic <컬러 토픽> --ir-topic <IR 토픽>
+   ros2 run ash_e_perception calib_astra_extrinsics calibrate ~/ash_e/calib --out ~/ash_e/astra_pro_extrinsics.yaml   # rms_px ≤ 0.5
+   ```
+
+### 6-9. 실행
+
+```bash
+# 전체 (Astra Pro, 뎁스 사용)
+ros2 launch ash_e_priority ash_e_all.launch.py \
+     camera_config:=$(ros2 pkg prefix ash_e_perception)/share/ash_e_perception/config/camera_astra_pro.yaml \
+     extrinsics_file:=$HOME/ash_e/astra_pro_extrinsics.yaml model_dir:=$HOME/ash_e/models
+
+# 일반 USB 웹캠 또는 컬러 전용
+ros2 run usb_cam usb_cam_node_exe &                    # /image_raw, /camera_info 발행
+ros2 launch ash_e_priority ash_e_all.launch.py color_topic:=/image_raw color_info_topic:=/camera_info use_depth:=false
+
+# 확인
+ros2 topic hz /ash_e/detections                        # 목표 ≥ 5 Hz (사람 3명)
+ros2 topic echo /ash_e/target --once
+rviz2                                                  # MarkerArray /ash_e/priority/markers
+```
+
+- 카메라 드라이버 런치까지 같이 띄우려면 `camera_launch:=<드라이버 런치 파일 경로>`.
+- 카메라 장착 위치(정적 TF) 기본값은 높이 1.1 m, 앞쪽 0.1 m입니다. 실제 위치로 바꾸고, 드라이버가 같은 TF를 내면 `publish_static_tf:=false`.
+- 우선순위 대상 지정·해제: `ros2 service call /ash_e/priority/set_lock std_srvs/srv/SetBool "{data: true}"`.
+
+### 6-10. 이식 검증 (Windows 결과와 같은지)
+
+같은 영상을 Windows 프로토타입과 라즈베리파이 ROS 노드로 각각 돌려 결과를 비교합니다. 여러 사람이 나오는 영상을 포함해 3개 이상으로 합니다.
+
+```bash
+# (Windows) 기준 결과
+.venv\Scripts\python prototype\log_replay_jsonl.py <clip.mp4> proto.jsonl
+# (라즈베리파이) 영상 → ROS 녹화 파일 → 재생하며 결과 기록
+ros2 run ash_e_perception video_to_bag <clip.mp4> clip_bag --color-topic /image_raw --info-topic /camera_info --hfov-deg 70
+ros2 launch ash_e_perception perception.launch.py use_sim_time:=true equivalence_mode:=true use_depth:=false \
+     color_topic:=/image_raw color_info_topic:=/camera_info &
+ros2 run ash_e_priority priority_node --ros-args -r __ns:=/ash_e \
+     --params-file $(ros2 pkg prefix ash_e_priority)/share/ash_e_priority/config/priority.yaml \
+     -p use_sim_time:=true -p tick_rate_hz:=0.1 &
+ros2 run ash_e_perception dump_jsonl ros.jsonl --idle-exit-s 5 --ros-args -p use_sim_time:=true &
+sleep 5; ros2 bag play clip_bag -r 0.2 --clock
+# 비교 (종료 코드 0이면 통과)
+python3 prototype/compare_jsonl.py proto.jsonl ros.jsonl
+```
+
+### 6-11. 성능·장시간 점검과 알려진 위험
+
+| 점검 | 방법 | 기준 |
+| --- | --- | --- |
+| 처리 속도 | `ros2 topic hz /ash_e/detections` | ≥ 5 Hz (사람 3명) |
+| 뎁스 거리 | `ros2 run ash_e_perception depth_check --bag <bag>`, 줄자로 1~5 m | 오차 ≤ 5% (3 m 이내) |
+| 장시간 | 30분 연속 실행, `vcgencmd measure_temp`, `vcgencmd get_throttled`, `top` | 메모리 증가 ≤ 50 MB, 과열로 성능 저하 없음 |
+
+- **뎁스 정렬 시간:** Windows PC에서 프레임당 약 18 ms, 라즈베리파이에서는 40~60 ms로 예상됩니다(예산 5~15 ms). 로그의 `align avg ... ms`가 크면 `depth_align_decimate:=4` 또는 컬러를 640×480으로 낮춥니다.
+- **인식 성능:** P03 최종 시험 기준 정밀도 0.471, 유사물(펜·막대·휴대폰) 오확정이 많습니다(5-9절). 실기 시험에서 다시 측정해야 합니다.
+- 자세한 내용: `_workspace/02b_perception_notes.md`, `_workspace/02b_priority_notes.md`, `_workspace/03b_qa_report.md`.
 
 ---
 
